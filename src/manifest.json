@@ -1,0 +1,23 @@
+{
+  "name": "edu-mini",
+  "appid": "",
+  "description": "",
+  "versionName": "1.0.0",
+  "versionCode": "100",
+  "transformPx": false,
+  "mp-weixin": {
+    "appid": "wx4cf97c89d71dff23",
+    "setting": {
+      "urlCheck": false,
+      "es6": true,
+      "postcss": true,
+      "minified": true
+    },
+    "usingComponents": true,
+    "resizable": false,
+    "pageOrientation": "portrait",
+    "requiredBackgroundModes": [
+      "audio"
+    ]
+  }
+}

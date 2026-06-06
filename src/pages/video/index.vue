@@ -1,0 +1,279 @@
+<template>
+  <view class="video-page" :style="themeVars">
+    <common-video
+      :video-list="videoList"
+      :initial-index="initialIndex"
+      @cast="onCast"
+      @change="onChange"
+      @ended="onEnded"
+    />
+
+    <!-- 免费次数用完提示弹框 -->
+    <view v-if="showNoTimesDialog" class="no-times-overlay">
+      <view class="no-times-dialog">
+        <text class="no-times-title">免费次数已用完</text>
+        <text class="no-times-desc"
+          >您的免费观看次数已用完，成为会员即可无限观看</text
+        >
+        <view class="no-times-actions">
+          <view class="no-times-btn btn-cancel" @tap="onDialogCancel">
+            <text class="btn-cancel-text">取消</text>
+          </view>
+          <view class="no-times-btn btn-confirm" @tap="onDialogConfirm">
+            <text class="btn-confirm-text">获取会员</text>
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+</template>
+
+<script setup lang="ts">
+import { ref } from 'vue'
+import { guardedOnLoad } from '@/utils/auth-guard'
+import CommonVideo from '@/components/common-video.vue'
+import type { VideoItem } from '@/components/common-video.vue'
+import { deductUserTimes } from '@/utils/auth'
+import { getVideoList, reportWatchFinish, type VideoApiItem } from '@/apis'
+import { useTheme } from '@/utils/theme'
+
+const { themeVars } = useTheme()
+
+/** 原始视频列表（用于获取 id、isFinish 等业务字段） */
+const rawVideoList = ref<VideoApiItem[]>([])
+/** 传给组件的视频列表（保留 isFinish 状态，便于样式区分） */
+const videoList = ref<VideoItem[]>([])
+const initialIndex = ref(0)
+/** 当前分类 ID */
+const currentTypeId = ref<number | undefined>(undefined)
+/** 页面参数中是否显式指定了 index */
+let hasExplicitIndex = false
+/** 免费次数用完弹框 */
+const showNoTimesDialog = ref(false)
+
+/** 同步视频列表到组件，保持 isFinish 状态 */
+function syncVideoList() {
+  videoList.value = rawVideoList.value.map((item) => ({
+    title: item.name,
+    url: item.url,
+    isFinish: !!item.isFinish,
+  }))
+}
+
+/** 从接口获取视频列表 */
+async function fetchVideoList(typeId: number) {
+  const userInfo = uni.getStorageSync('wx_user_info') as any
+  const userId = userInfo?.userId
+  try {
+    const data = await getVideoList(typeId, userId)
+    if (data && data.length) {
+      rawVideoList.value = data
+      syncVideoList()
+      // 未显式指定 index 时，定位到第一个未完成的视频；全部完成则默认第一个
+      if (!hasExplicitIndex) {
+        const firstUnfinished = data.findIndex((item) => !item.isFinish)
+        initialIndex.value = firstUnfinished >= 0 ? firstUnfinished : 0
+      }
+    }
+  } catch (err) {
+    console.error('获取视频列表失败:', err)
+  }
+}
+
+guardedOnLoad((query) => {
+  // 从页面参数获取初始索引：仅当指定为大于 0 的有效索引时才视为显式指定，
+  // 避免传 index=0 时覆盖掉“第一个未完成”的默认策略
+  if (query?.index != null && query.index !== '') {
+    const idx = Number(query.index)
+    if (Number.isFinite(idx) && idx > 0) {
+      hasExplicitIndex = true
+      initialIndex.value = idx
+    }
+  }
+  // 通过 typeId 从接口拉取视频列表
+  if (query?.typeId) {
+    const typeId = Number(query.typeId)
+    currentTypeId.value = typeId
+    fetchVideoList(typeId)
+  }
+  // 每打开一个视频页面，扣减一次观看次数
+  doDeduct()
+})
+
+/**
+ * 执行扣除次数（每打开一个视频页面扣减一次）
+ */
+async function doDeduct() {
+  const userInfo = uni.getStorageSync('wx_user_info') as any
+  const userId = userInfo?.userId
+  if (!userId) return
+
+  // VIP 用户不扣减试看次数
+  if (userInfo?.vip) {
+    console.log('VIP 用户，跳过扣减次数')
+    return
+  }
+
+  // 非 VIP 且剩余次数已用完，直接弹框提示
+  if (userInfo.freeViewRemain != null && userInfo.freeViewRemain <= 0) {
+    showNoTimesDialog.value = true
+    return
+  }
+
+  try {
+    await deductUserTimes(userId)
+    console.log('扣除次数成功')
+    // 扣减后重新检查剩余次数
+    const updatedInfo = uni.getStorageSync('wx_user_info') as any
+    if (
+      updatedInfo &&
+      !updatedInfo.vip &&
+      updatedInfo.freeViewRemain != null &&
+      updatedInfo.freeViewRemain <= 0
+    ) {
+      showNoTimesDialog.value = true
+    }
+  } catch (err) {
+    console.error('扣除次数失败:', err)
+  }
+}
+
+/** 弹框取消：回到首页 */
+function onDialogCancel() {
+  showNoTimesDialog.value = false
+  uni.reLaunch({ url: '/pages/index/index' })
+}
+
+/** 弹框确认：跳转至我的邀请页面 */
+function onDialogConfirm() {
+  showNoTimesDialog.value = false
+  uni.redirectTo({ url: '/pages/setting/invite-list' })
+}
+
+function onCast(video: VideoItem) {
+  console.log('投屏:', video.title)
+}
+
+function onChange(index: number) {
+  console.log('切换到视频:', index)
+}
+
+/** 上报视频观看完成 */
+async function reportWatchFinished(index: number) {
+  const item = rawVideoList.value[index]
+  if (!item) return
+  // 已完成则不再上报
+  if (item.isFinish) return
+
+  const userInfo = uni.getStorageSync('wx_user_info') as any
+  const userId = userInfo?.userId
+  if (!userId) return
+
+  try {
+    await reportWatchFinish({
+      userId,
+      videoId: item.id,
+      ...(currentTypeId.value ? { typeId: currentTypeId.value } : {}),
+    })
+    // 本地标记为已完成，同步到组件视频列表，避免重复上报并刷新样式
+    item.isFinish = true
+    if (videoList.value[index]) {
+      videoList.value[index] = { ...videoList.value[index], isFinish: true }
+    }
+    console.log('视频观看完成上报成功:', item.id)
+  } catch (err) {
+    console.error('视频观看完成上报失败:', err)
+  }
+}
+
+function onEnded(index: number) {
+  console.log('视频播放完成:', index)
+  reportWatchFinished(index)
+}
+</script>
+
+<style lang="less" scoped>
+.video-page {
+  width: 100%;
+  height: 100vh;
+  background-color: #000;
+  overflow: hidden;
+}
+
+/* 免费次数用完弹框 */
+.no-times-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.no-times-dialog {
+  width: 40vw;
+  padding: 3vw 3vw 2.4vw;
+  border-radius: 2.4vw;
+  background: #fff8eb;
+  box-shadow: 0 0.8vw 3vw rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.no-times-title {
+  font-size: 2.6vw;
+  font-weight: 800;
+  color: #333333;
+  margin-bottom: 1.2vw;
+}
+
+.no-times-desc {
+  font-size: 1.6vw;
+  color: #666666;
+  text-align: center;
+  margin-bottom: 2.4vw;
+  line-height: 1.6;
+}
+
+.no-times-actions {
+  display: flex;
+  flex-direction: row;
+  gap: 2vw;
+  width: 100%;
+  justify-content: center;
+}
+
+.no-times-btn {
+  flex: 1;
+  height: 4.4vw;
+  border-radius: 2.2vw;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-cancel {
+  background: #f0f0f0;
+}
+
+.btn-cancel-text {
+  font-size: 1.8vw;
+  font-weight: 600;
+  color: #666666;
+}
+
+.btn-confirm {
+  background: linear-gradient(135deg, #f5a0c0, var(--theme-end));
+}
+
+.btn-confirm-text {
+  font-size: 1.8vw;
+  font-weight: 600;
+  color: #ffffff;
+}
+</style>

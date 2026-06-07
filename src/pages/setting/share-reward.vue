@@ -251,6 +251,7 @@ onShareTimeline(() => {
   flex-direction: column;
   overflow: hidden;
   box-sizing: border-box;
+  padding-left: env(safe-area-inset-left);
 }
 
 // ── 导航栏（与设置页统一）──

@@ -137,7 +137,7 @@
         <view class="playlist-footer">
           <text class="playlist-footer-text">更多内容持续更新中</text>
           <text class="playlist-footer-link" @tap.stop="onOpenContact"
-            >联系我们催更👉</text
+            >👉联系我们催更</text
           >
         </view>
       </scroll-view>
@@ -198,9 +198,12 @@ const props = withDefaults(
   defineProps<{
     videoList: VideoItem[]
     initialIndex?: number
+    /** 外部控制暂停（如免费次数用完时冻结播放） */
+    paused?: boolean
   }>(),
   {
     initialIndex: 0,
+    paused: false,
   },
 )
 
@@ -208,6 +211,8 @@ const emit = defineEmits<{
   (e: 'back'): void
   (e: 'change', index: number): void
   (e: 'ended', index: number): void
+  /** 次数耗尽时用户尝试播放/切换，通知外部弹框 */
+  (e: 'blocked'): void
 }>()
 
 const speedOptions = [0.5, 0.8, 1, 1.25, 1.5, 2]
@@ -463,6 +468,11 @@ function setSpeed(speed: number) {
 
 function switchVideo(index: number) {
   if (index === currentIndex.value) return
+  // 外部冻结时阻止切换，并通知外部弹框
+  if (props.paused) {
+    emit('blocked')
+    return
+  }
   currentIndex.value = index
   emit('change', index)
   // src 变更后 autoplay 自动播放，通过 videoContext 确保倍速应用
@@ -489,6 +499,11 @@ function onPlay() {
 
 /** 点击中间播放按钮恢复播放 */
 function playVideo() {
+  // 外部冻结时禁止播放，通知外部弹框
+  if (props.paused) {
+    emit('blocked')
+    return
+  }
   if (!videoContext) initVideoContext()
   if (videoContext) {
     try {
@@ -615,8 +630,24 @@ function preloadAll() {
 watch(
   () => props.initialIndex,
   (val) => {
-    if (val !== currentIndex.value) {
+    if (val !== currentIndex.value && !props.paused) {
       switchVideo(val)
+    }
+  },
+)
+
+/** 外部 paused 变化时暂停/恢复播放 */
+watch(
+  () => props.paused,
+  (val) => {
+    if (val) {
+      // 暂停视频
+      if (!videoContext) initVideoContext()
+      if (videoContext) {
+        try {
+          videoContext.pause()
+        } catch (_e) {}
+      }
     }
   },
 )
@@ -632,6 +663,8 @@ watch(
     if (!newUrl || newUrl === oldUrl) return
     // 等 v-if 渲染出 video 元素后再创建 context
     setTimeout(() => {
+      // 外部冻结时不自动播放
+      if (props.paused) return
       initVideoContext()
       if (videoContext) {
         try {

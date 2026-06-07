@@ -104,6 +104,8 @@
       :text-content="freeTextContent"
       :qrcode-url="freeQrcodeUrl"
       :remain-count="remainCount"
+      :close-on-overlay="true"
+      @close="onFreeDialogClose"
       @confirm="onRedeemConfirm"
     />
 
@@ -120,6 +122,7 @@
       :title="vipName"
       :subtitle="vipTextContent"
       :qrcode-url="vipQrcodeUrl"
+      :close-on-overlay="true"
       @confirm="onVipDialogConfirm"
     />
   </view>
@@ -222,24 +225,35 @@ async function fetchTabs() {
   try {
     const data = await getTabList()
     if (data && data.length) {
-      tabs.value = [
-        {
-          name: '设置',
-          isNav: true,
-          fixed: true,
-          navUrl: '/pages/setting/index',
-        },
-        {
-          name: '分享福利',
-          isNav: true,
-          navUrl: '/pages/setting/share-reward',
-        },
-        ...data.map((item) => ({ name: item.name, id: item.id })),
-      ]
-      // 前两个为导航 tab，第一个内容 tab 在索引 2
-      currentTab.value = 2
-      previousTab.value = 2
-      fetchCategoryList(2)
+      // 所有 tab 均从接口动态获取，接口未返回则不显示
+      tabs.value = data.map((item) => {
+        // 固定导航型 tab：设置
+        if (item.name === '设置') {
+          return {
+            name: item.name,
+            isNav: true,
+            fixed: true,
+            navUrl: '/pages/setting/index',
+          }
+        }
+        // 导航型 tab：分享福利
+        if (item.name === '分享福利') {
+          return {
+            name: item.name,
+            isNav: true,
+            navUrl: '/pages/setting/share-reward',
+          }
+        }
+        // 普通内容 tab
+        return { name: item.name, id: item.id }
+      })
+      // 定位到第一个内容 tab
+      const firstContentIdx = tabs.value.findIndex((t) => !t.isNav)
+      if (firstContentIdx >= 0) {
+        currentTab.value = firstContentIdx
+        previousTab.value = firstContentIdx
+        fetchCategoryList(firstContentIdx)
+      }
     }
   } catch (e) {
     console.error('获取 Tab 列表失败:', e)
@@ -370,6 +384,18 @@ const remainCount = ref(0)
 const freeName = ref('')
 const freeTextContent = ref('')
 const freeQrcodeUrl = ref('')
+/** 关闭 free-dialog 后是否弹出 share-dialog */
+const pendingShareDialog = ref(false)
+
+/** free-dialog 关闭后，延迟弹出 share-dialog */
+function onFreeDialogClose() {
+  if (pendingShareDialog.value) {
+    pendingShareDialog.value = false
+    setTimeout(() => {
+      showShareDialog.value = true
+    }, 100)
+  }
+}
 
 /** 分享弹框 */
 const showShareDialog = ref(false)
@@ -437,8 +463,8 @@ async function fetchFreeQrcode() {
     uni.setStorageSync(QRCODE_INDEX_KEY, nextIdx)
 
     showFreeDialog.value = true
-    // 同时弹出分享弹框（free-dialog 在上层）
-    showShareDialog.value = true
+    // 标记关闭后弹出分享弹框
+    pendingShareDialog.value = true
   } catch (e) {
     console.error('获取免费领取二维码失败:', e)
   }
@@ -597,6 +623,7 @@ onShareTimeline(() => {
   flex-direction: column;
   overflow: hidden;
   box-sizing: border-box;
+  padding-left: env(safe-area-inset-left);
 }
 
 // 顶部标签栏

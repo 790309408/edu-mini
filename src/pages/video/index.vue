@@ -3,9 +3,11 @@
     <common-video
       :video-list="videoList"
       :initial-index="initialIndex"
+      :paused="isPlayBlocked"
       @cast="onCast"
       @change="onChange"
       @ended="onEnded"
+      @blocked="onPlayBlocked"
     />
 
     <!-- 免费次数用完提示弹框 -->
@@ -25,16 +27,42 @@
         </view>
       </view>
     </view>
+
+    <!-- 免费领取弹框 -->
+    <free-dialog
+      v-model:visible="showFreeDialog"
+      :name="freeName"
+      :text-content="freeTextContent"
+      :qrcode-url="freeQrcodeUrl"
+      :remain-count="remainCount"
+      :close-on-overlay="true"
+      @confirm="onRedeemConfirm"
+    />
+
+    <!-- 兑换成功弹框 -->
+    <success-dialog
+      v-model:visible="showSuccessDialog"
+      title="兑换成功"
+      content="恭喜您，兑换码已成功兑换，快去畅享精彩内容吧！"
+    />
   </view>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { guardedOnLoad } from '@/utils/auth-guard'
 import CommonVideo from '@/components/common-video.vue'
 import type { VideoItem } from '@/components/common-video.vue'
-import { deductUserTimes } from '@/utils/auth'
-import { getVideoList, reportWatchFinish, type VideoApiItem } from '@/apis'
+import FreeDialog from '@/components/free-dialog.vue'
+import SuccessDialog from '@/components/success-dialog.vue'
+import { deductUserTimes, getUserInfo } from '@/utils/auth'
+import {
+  getVideoList,
+  reportWatchFinish,
+  getQrcodeListByType,
+  redeemCode as apiRedeemCode,
+  type VideoApiItem,
+} from '@/apis'
 import { useTheme } from '@/utils/theme'
 
 const { themeVars } = useTheme()
@@ -50,6 +78,25 @@ const currentTypeId = ref<number | undefined>(undefined)
 let hasExplicitIndex = false
 /** 免费次数用完弹框 */
 const showNoTimesDialog = ref(false)
+/** 次数已耗尽的持久冻结标记（只有兑换成功才解除） */
+const timesExhausted = ref(false)
+
+/** 免费领取弹框 */
+const showFreeDialog = ref(false)
+const freeName = ref('')
+const freeTextContent = ref('')
+const freeQrcodeUrl = ref('')
+const remainCount = ref(0)
+
+/** 兑换成功弹框 */
+const showSuccessDialog = ref(false)
+
+const QRCODE_INDEX_KEY = 'free_qrcode_index'
+
+/** 冻结播放：次数耗尽且未兑换成功时始终禁止播放 */
+const isPlayBlocked = computed(
+  () => timesExhausted.value || showNoTimesDialog.value || showFreeDialog.value,
+)
 
 /** 同步视频列表到组件，保持 isFinish 状态 */
 function syncVideoList() {
@@ -96,6 +143,12 @@ guardedOnLoad((query) => {
     currentTypeId.value = typeId
     fetchVideoList(typeId)
   }
+  // 非 VIP 时预获取免费领取二维码数据
+  const userInfo0 = uni.getStorageSync('wx_user_info') as any
+  if (userInfo0 && (userInfo0.vip === false || userInfo0.vipType === 0)) {
+    remainCount.value = Number(userInfo0.freeViewRemain) || 0
+    fetchFreeQrcode()
+  }
   // 每打开一个视频页面，扣减一次观看次数
   doDeduct()
 })
@@ -108,14 +161,15 @@ async function doDeduct() {
   const userId = userInfo?.userId
   if (!userId) return
 
-  // VIP 用户不扣减试看次数
-  if (userInfo?.vip) {
+  // VIP 用户（vip=true 且 vipType>0）不扣减试看次数
+  if (userInfo?.vip === true && Number(userInfo?.vipType) > 0) {
     console.log('VIP 用户，跳过扣减次数')
     return
   }
 
   // 非 VIP 且剩余次数已用完，直接弹框提示
   if (userInfo.freeViewRemain != null && userInfo.freeViewRemain <= 0) {
+    timesExhausted.value = true
     showNoTimesDialog.value = true
     return
   }
@@ -131,6 +185,7 @@ async function doDeduct() {
       updatedInfo.freeViewRemain != null &&
       updatedInfo.freeViewRemain <= 0
     ) {
+      timesExhausted.value = true
       showNoTimesDialog.value = true
     }
   } catch (err) {
@@ -144,14 +199,66 @@ function onDialogCancel() {
   uni.reLaunch({ url: '/pages/index/index' })
 }
 
-/** 弹框确认：跳转至我的邀请页面 */
+/** 获取非会员免费领取二维码弹框数据 */
+async function fetchFreeQrcode() {
+  try {
+    const data = await getQrcodeListByType(1)
+    if (!data || !data.length) return
+    const item = data[0]
+    const images = item.images || []
+    if (!images.length) return
+
+    let idx = Number(uni.getStorageSync(QRCODE_INDEX_KEY)) || 0
+    if (idx < 0 || isNaN(idx)) idx = 0
+    idx = idx % images.length
+
+    freeName.value = item.name || ''
+    freeTextContent.value = item.textContent || ''
+    freeQrcodeUrl.value = images[idx].imageUrl || ''
+
+    const nextIdx = (idx + 1) % images.length
+    uni.setStorageSync(QRCODE_INDEX_KEY, nextIdx)
+  } catch (e) {
+    console.error('获取免费领取二维码失败:', e)
+  }
+}
+
+/** 弹框确认：弹出免费领取弹框 */
 function onDialogConfirm() {
   showNoTimesDialog.value = false
-  uni.redirectTo({ url: '/pages/setting/invite-list' })
+  showFreeDialog.value = true
+}
+
+/** 兑换码确认 */
+async function onRedeemConfirm(code: string) {
+  const userInfo = uni.getStorageSync('wx_user_info') as any
+  const userId = userInfo && userInfo.userId
+  if (!userId) {
+    uni.showToast({ title: '用户信息丢失，请重试', icon: 'none' })
+    return
+  }
+  try {
+    await apiRedeemCode(userId, code)
+    showFreeDialog.value = false
+    timesExhausted.value = false // 兑换成功，解除冻结
+    try {
+      await getUserInfo()
+    } catch (refreshErr) {
+      console.error('兑换后刷新用户信息失败:', refreshErr)
+    }
+    showSuccessDialog.value = true
+  } catch (e) {
+    console.error('兑换失败:', e)
+  }
 }
 
 function onCast(video: VideoItem) {
   console.log('投屏:', video.title)
+}
+
+/** 次数耗尽时用户尝试播放/切换，弹出免费领取弹框 */
+function onPlayBlocked() {
+  showFreeDialog.value = true
 }
 
 function onChange(index: number) {
@@ -198,6 +305,8 @@ function onEnded(index: number) {
   height: 100vh;
   background-color: #000;
   overflow: hidden;
+  box-sizing: border-box;
+  padding-left: env(safe-area-inset-left);
 }
 
 /* 免费次数用完弹框 */

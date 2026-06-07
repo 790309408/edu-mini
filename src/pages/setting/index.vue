@@ -120,6 +120,7 @@
     <VipDialog
       :visible="showContactDialog"
       :qrcode-url="contactQrcodeUrl"
+      :close-on-overlay="true"
       title="联系我们"
       subtitle="添加老师微信，领取专属福利"
       confirm-text="长按识别添加老师"
@@ -134,6 +135,7 @@
       :remain-count="remainCount"
       :text-content="qrcodeTip"
       :name="qrcodeName"
+      :close-on-overlay="true"
       @update:visible="showFreeDialog = $event"
       @close="showFreeDialog = false"
       @confirm="onRedeemConfirm"
@@ -172,9 +174,10 @@ const vipExpire = ref('')
 
 const VIP_TYPE_MAP: Record<number, string> = {
   1: '月度会员',
-  2: '永久会员',
+  2: '月度会员',
   3: '季度会员',
   4: '年度会员',
+  5: '永久会员',
 }
 
 const vipTypeLabel = computed(() => VIP_TYPE_MAP[vipType.value] || '会员')
@@ -342,6 +345,7 @@ onShareAppMessage(() => {
   flex-direction: column;
   overflow: hidden;
   box-sizing: border-box;
+  padding-left: env(safe-area-inset-left);
 }
 
 // 导航栏

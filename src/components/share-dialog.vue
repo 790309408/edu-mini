@@ -1,6 +1,11 @@
 <template>
-  <view v-if="visible" class="share-overlay" @tap="onOverlayTap">
-    <view class="share-container" @tap.stop>
+  <view
+    v-if="visible"
+    class="share-overlay"
+    :class="{ 'overlay-closing': isClosing }"
+    @tap="onOverlayTap"
+  >
+    <view class="share-container" :class="containerAnimClass" @tap.stop>
       <!-- 关闭按钮 -->
       <view class="close-btn" @tap="onClose">
         <text class="close-icon">×</text>
@@ -69,6 +74,8 @@
 </template>
 
 <script setup lang="ts">
+import { ref, computed } from 'vue'
+
 const props = withDefaults(
   defineProps<{
     /** 是否显示弹框 */
@@ -90,9 +97,24 @@ const emit = defineEmits<{
   (e: 'confirm'): void
 }>()
 
+const isClosing = ref(false)
+
+const containerAnimClass = computed(() => {
+  if (isClosing.value) return 'container-closing'
+  return 'container-open'
+})
+
+function doClose() {
+  isClosing.value = true
+  setTimeout(() => {
+    emit('update:visible', false)
+    emit('close')
+    isClosing.value = false
+  }, 280)
+}
+
 function onClose() {
-  emit('update:visible', false)
-  emit('close')
+  doClose()
 }
 
 function onOverlayTap() {
@@ -118,6 +140,11 @@ function onConfirm() {
   align-items: center;
   justify-content: center;
   z-index: 9999;
+  animation: overlayFadeIn 0.3s ease both;
+}
+
+.overlay-closing {
+  animation: overlayFadeOut 0.28s ease both !important;
 }
 
 .share-container {
@@ -131,6 +158,14 @@ function onConfirm() {
   align-items: center;
   overflow: visible;
   box-shadow: 0 1vw 4vw rgba(0, 0, 0, 0.15);
+}
+
+.container-open {
+  animation: containerIn 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.15) both;
+}
+
+.container-closing {
+  animation: containerOut 0.28s ease both !important;
 }
 
 /* 关闭按钮 */
@@ -374,5 +409,46 @@ function onConfirm() {
   font-size: 1.8vw;
   font-weight: bold;
   color: #fff;
+}
+
+/* ── 弹框出入场过渡动画 ── */
+@keyframes overlayFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes overlayFadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes containerIn {
+  from {
+    transform: scale(0.75);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes containerOut {
+  from {
+    transform: scale(1);
+    opacity: 1;
+  }
+  to {
+    transform: scale(0.75);
+    opacity: 0;
+  }
 }
 </style>

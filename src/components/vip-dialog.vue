@@ -6,6 +6,15 @@
         <text class="close-icon">×</text>
       </view>
 
+      <!-- 装饰星星 -->
+      <text class="deco-star star-1">✦</text>
+      <text class="deco-star star-2">★</text>
+      <text class="deco-star star-3">✦</text>
+
+      <!-- 云朵装饰 -->
+      <view class="deco-cloud cloud-left" />
+      <view class="deco-cloud cloud-right" />
+
       <!-- 标题区 -->
       <view class="vip-header">
         <text class="vip-title">{{ title }}</text>
@@ -102,8 +111,12 @@ function onConfirm() {
   width: 36vw;
   padding: 2.4vw 2vw 1.4vw;
   border-radius: 3vw;
-  background: #fff8eb;
-  box-shadow: 0 0.8vw 3vw rgba(0, 0, 0, 0.15);
+  background: #f5ead6;
+  box-shadow: 0 1vw 4vw rgba(0, 0, 0, 0.15);
+  overflow: visible;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 /* 关闭按钮 */
@@ -117,35 +130,107 @@ function onConfirm() {
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.9);
-  z-index: 2;
+  background: rgba(0, 0, 0, 0.08);
+  z-index: 5;
 }
 
 .close-icon {
-  font-size: 1.8vw;
-  color: #333333;
+  font-size: 2vw;
+  color: #666;
   line-height: 1;
+}
+
+/* 装饰星星 */
+.deco-star {
+  position: absolute;
+  color: #e8c860;
+  z-index: 1;
+  text-shadow: 0 0.2vw 0.4vw rgba(200, 160, 0, 0.3);
+}
+
+.star-1 {
+  top: 1.2vw;
+  left: 3vw;
+  font-size: 2vw;
+}
+
+.star-2 {
+  top: 0.6vw;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 1.6vw;
+}
+
+.star-3 {
+  top: 1.6vw;
+  right: 4vw;
+  font-size: 1.4vw;
+}
+
+/* 云朵装饰 */
+.deco-cloud {
+  position: absolute;
+  width: 6vw;
+  height: 2.4vw;
+  background: rgba(255, 255, 255, 0.4);
+  border-radius: 1.2vw;
+  z-index: 0;
+}
+
+.deco-cloud::before {
+  content: '';
+  position: absolute;
+  top: -0.8vw;
+  left: 1.2vw;
+  width: 2.4vw;
+  height: 2.4vw;
+  background: rgba(255, 255, 255, 0.4);
+  border-radius: 50%;
+}
+
+.deco-cloud::after {
+  content: '';
+  position: absolute;
+  top: -0.4vw;
+  left: 3vw;
+  width: 1.8vw;
+  height: 1.8vw;
+  background: rgba(255, 255, 255, 0.4);
+  border-radius: 50%;
+}
+
+.cloud-left {
+  left: 0.5vw;
+  top: 8vw;
+}
+
+.cloud-right {
+  right: 0.5vw;
+  bottom: 5vw;
 }
 
 /* 顶部标题 */
 .vip-header {
   text-align: center;
   margin-bottom: 1.6vw;
+  z-index: 2;
 }
 
 .vip-title {
   display: block;
-  font-size: 2.4vw;
-  font-weight: 800;
-  color: #333333;
+  font-size: 2.6vw;
+  font-weight: 900;
+  color: #4a3520;
+  text-shadow: none;
+  letter-spacing: 0.15vw;
 }
 
 .vip-subtitle {
   display: block;
-  margin-top: 0.4vw;
+  margin-top: 0.6vw;
   font-size: 1.6vw;
   font-weight: 600;
-  color: #444444;
+  color: #8a7a6a;
 }
 
 /* 二维码 */
@@ -154,18 +239,20 @@ function onConfirm() {
   align-items: center;
   justify-content: center;
   margin-bottom: 1.2vw;
+  z-index: 2;
 }
 
 .qrcode-wrapper {
   width: 18vw;
   height: 18vw;
   border: none;
-  border-radius: 0.6vw;
-  background: #fff8eb;
+  border-radius: 1vw;
+  background: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  box-shadow: 0 0.3vw 1vw rgba(0, 0, 0, 0.08);
 }
 
 .qrcode-image {
@@ -193,12 +280,13 @@ function onConfirm() {
   align-items: center;
   justify-content: center;
   padding: 0.6vw 0;
+  z-index: 2;
 }
 
 .vip-tip-text {
   font-size: 1.4vw;
-  font-weight: 500;
-  color: #999999;
-  letter-spacing: 0.2vw;
+  font-weight: 600;
+  color: #8a7a6a;
+  letter-spacing: 0.1vw;
 }
 </style>

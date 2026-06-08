@@ -484,8 +484,51 @@ async function handleShareBind(bindUserId: string | number) {
   }
 }
 
+/** 处理从分享链接进入：自动定位到图文所在 tab 并跳转文章页 */
+async function handleArticleShare(tabId: number, articleId: number) {
+  // 等待 tab 列表加载完成
+  await fetchTabs()
+  // 找到对应的内容 tab
+  const tabIndex = tabs.value.findIndex((t) => t.id === tabId && !t.isNav)
+  if (tabIndex < 0) return
+  // 切换到对应 tab 并加载分类数据
+  currentTab.value = tabIndex
+  previousTab.value = tabIndex
+  const data = await getCategoryList(tabId)
+  if (data) {
+    tabDataMap.value[tabIndex] = data.map((item) => ({
+      id: item.id,
+      title: item.name,
+      cover: item.cover || '',
+      episodes: item.totalEpisodes,
+      isVip: item.isVip,
+      contentType: item.contentType,
+      content: item.content,
+    }))
+    loadedTabs.value.add(tabIndex)
+  }
+  // 找到目标文章并写入 storage，然后跳转
+  const article = (tabDataMap.value[tabIndex] || []).find(
+    (item) => item.id === articleId,
+  )
+  if (article) {
+    uni.setStorageSync('article_content', {
+      id: article.id,
+      title: article.title,
+      content: article.content || '',
+      tabId,
+    })
+    uni.navigateTo({ url: `/pages/article/index?typeId=${articleId}` })
+  }
+}
+
 guardedOnLoad((query) => {
-  fetchTabs()
+  // 从分享链接进入：图文文章直达
+  if (query && query.articleId && query.tabId) {
+    handleArticleShare(Number(query.tabId), Number(query.articleId))
+  } else {
+    fetchTabs()
+  }
   const userInfo = uni.getStorageSync('wx_user_info') as any
   if (userInfo && (userInfo.vip === false || userInfo.vipType === 0)) {
     // 剩余试看次数从用户信息 freeViewRemain 获取
@@ -553,15 +596,18 @@ function onCardTap(item: CourseItem) {
   }
   // 图文类型：跳转图文页面（富文本通过 storage 传递，避免 URL 长度限制）
   if (item.contentType === 2) {
+    const currentTabData = tabs.value[currentTab.value]
     uni.setStorageSync('article_content', {
       id: item.id,
       title: item.title,
       content: item.content || '',
+      tabId: currentTabData?.id || 0,
     })
-    uni.navigateTo({ url: `/pages/article/index?id=${item.id}` })
+    uni.navigateTo({ url: `/pages/article/index?typeId=${item.id}` })
     return
   }
   // 默认视频类型
+  uni.setStorageSync('video_course_cover', item.cover || '')
   uni.navigateTo({ url: `/pages/video/index?typeId=${item.id}` })
 }
 

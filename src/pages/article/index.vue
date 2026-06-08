@@ -33,8 +33,10 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
+import { onShareAppMessage, onShareTimeline } from '@dcloudio/uni-app'
 import { guardedOnLoad } from '@/utils/auth-guard'
 import { useTheme } from '@/utils/theme'
+import { getShareConfig, getCategoryList, type ShareConfig } from '@/apis'
 import NavBar from '@/components/nav-bar.vue'
 
 const { themeVars } = useTheme()
@@ -47,6 +49,8 @@ interface ContentBlock {
 const title = ref('')
 const blocks = ref<ContentBlock[]>([])
 const imageList = ref<string[]>([])
+const tabId = ref(0)
+const articleId = ref(0)
 
 // 段落等基础排版（图片单独渲染，无需在此处理）
 function normalizeHtml(html: string): string {
@@ -124,20 +128,117 @@ function onPreviewImage(src: string) {
   })
 }
 
-guardedOnLoad(() => {
+guardedOnLoad(async (query) => {
+  // 兼容小程序码 scene 传参（如 {"scene":"tabId=1&articleId=5"}）
+  if (query?.scene) {
+    const sceneStr = decodeURIComponent(query.scene as string)
+    sceneStr.split('&').forEach((pair) => {
+      const [key, val] = pair.split('=')
+      if (key && val && !(key in (query as any))) {
+        ;(query as any)[key] = val
+      }
+    })
+  }
+  // 读取 URL 参数（分享链接携带 tabId + articleId）
+  const urlTabId = query && query.tabId ? Number(query.tabId) : 0
+  const urlArticleId =
+    query && query.articleId
+      ? Number(query.articleId)
+      : query && query.typeId
+        ? Number(query.typeId)
+        : 0
+  tabId.value = urlTabId
+  articleId.value = urlArticleId
+
   // 从 storage 取出当前课程的图文内容（首页跳转前已写入）
   const cache = uni.getStorageSync('article_content') as
-    | { id: number; title: string; content: string }
+    | { id: number; title: string; content: string; tabId?: number }
     | ''
-  if (cache && typeof cache === 'object') {
+  if (cache && typeof cache === 'object' && cache.content) {
     title.value = cache.title || ''
+    tabId.value = cache.tabId || urlTabId
     parseContent(cache.content || '')
+  } else if (urlTabId && urlArticleId) {
+    // storage 无数据（分享链接进入）：从 API 回退加载
+    try {
+      const data = await getCategoryList(urlTabId)
+      const found = data && data.find((item) => item.id === urlArticleId)
+      if (found) {
+        title.value = found.name || ''
+        parseContent(found.content || '')
+      } else {
+        uni.reLaunch({ url: '/pages/index/index' })
+        return
+      }
+    } catch (_e) {
+      uni.reLaunch({ url: '/pages/index/index' })
+      return
+    }
   }
+  // 获取分享配置
+  fetchShareConfig()
 })
 
 function onBack() {
-  uni.navigateBack({ delta: 1 })
+  const pages = getCurrentPages()
+  if (pages.length <= 1) {
+    uni.reLaunch({ url: '/pages/index/index' })
+  } else {
+    uni.navigateBack({ delta: 1 })
+  }
 }
+
+/** 分享配置（从接口获取） */
+const shareConfig = ref<ShareConfig | null>(null)
+
+/** 获取分享配置 */
+async function fetchShareConfig() {
+  try {
+    const data = await getShareConfig()
+    if (data) {
+      shareConfig.value = data
+    }
+  } catch (e) {
+    console.error('获取分享配置失败:', e)
+  }
+}
+
+/** 分享给好友 */
+onShareAppMessage(() => {
+  const userInfo = uni.getStorageSync('wx_user_info') as any
+  const userId = userInfo && userInfo.userId ? userInfo.userId : ''
+  const friend = shareConfig.value?.friend
+  const parts = [
+    tabId.value ? `tabId=${tabId.value}` : '',
+    articleId.value ? `articleId=${articleId.value}` : '',
+    userId ? `userId=${userId}` : '',
+  ].filter(Boolean)
+  return {
+    title: friend?.title || title.value || '宝宝爱听 — 免费儿童教育视频',
+    desc: friend?.desc || '',
+    path: parts.length
+      ? `/pages/index/index?${parts.join('&')}`
+      : '/pages/index/index',
+    imageUrl: friend?.imageUrl || '',
+  }
+})
+
+/** 分享到朋友圈 */
+onShareTimeline(() => {
+  const userInfo = uni.getStorageSync('wx_user_info') as any
+  const userId = userInfo && userInfo.userId ? userInfo.userId : ''
+  const timeline = shareConfig.value?.timeline
+  const parts = [
+    tabId.value ? `tabId=${tabId.value}` : '',
+    articleId.value ? `articleId=${articleId.value}` : '',
+    userId ? `userId=${userId}` : '',
+  ].filter(Boolean)
+  return {
+    title: timeline?.title || title.value || '宝宝爱听 — 免费儿童教育视频',
+    query: parts.join('&'),
+    imageUrl: timeline?.imageUrl || '',
+  }
+})
 </script>
 
 <style lang="less" scoped>

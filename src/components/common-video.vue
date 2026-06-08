@@ -185,6 +185,7 @@ import {
 } from 'vue'
 import VipDialog from './vip-dialog.vue'
 import { getQrcodeListByType } from '@/apis'
+import { ensureAuth } from '@/utils/auth-guard'
 
 /** 视频项接口 */
 export interface VideoItem {
@@ -239,6 +240,9 @@ function onOpenContact() {
 
 /** 加载联系我们二维码（type=2） */
 async function loadContactQrcode() {
+  // 未登录时不调用
+  const userInfo = uni.getStorageSync('wx_user_info') as any
+  if (!userInfo || !userInfo.userId) return
   try {
     const list = await getQrcodeListByType(2)
     if (list && list.length > 0) {
@@ -271,11 +275,13 @@ const currentVideo = computed(() => {
 let videoContext: any = null
 const instance = getCurrentInstance()
 
-onMounted(() => {
+onMounted(async () => {
   initVideoContext()
   startControlsTimer()
   checkCastingSupport()
   checkDevTools()
+  // 等待登录完成后再加载联系我们二维码
+  await ensureAuth()
   loadContactQrcode()
   // 预加载全部视频
   preloadAll()
@@ -370,7 +376,13 @@ function onContainerTap() {
 
 function goBack() {
   emit('back')
-  uni.navigateBack()
+  // 导航栈只有当前页时，回首页；否则返回上一页
+  const pages = getCurrentPages()
+  if (pages.length <= 1) {
+    uni.reLaunch({ url: '/pages/index/index' })
+  } else {
+    uni.navigateBack()
+  }
 }
 
 function togglePlaylist() {
@@ -488,6 +500,16 @@ function switchVideo(index: number) {
 }
 
 function onPlay() {
+  // 外部冻结时，原生控件点击播放也会被立即拦截
+  if (props.paused) {
+    if (videoContext) {
+      try {
+        videoContext.pause()
+      } catch (_e) {}
+    }
+    emit('blocked')
+    return
+  }
   isPlaying.value = true
   // 播放/恢复时重新应用倍速（播放事件可能重置倍速）
   if (playbackRate.value !== 1 && videoContext) {

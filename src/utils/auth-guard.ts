@@ -17,7 +17,7 @@ let authPromise: Promise<void> | null = null
  * 同一生命周期内多次调用会复用同一个 Promise，避免重复请求
  * @param bindUserId 分享进入时携带的邀请人 userId，用于首次登录时传递给后端建立绑定关系
  */
-async function ensureAuth(bindUserId?: string | number): Promise<void> {
+export async function ensureAuth(bindUserId?: string | number): Promise<void> {
   const token = uni.getStorageSync(TOKEN_KEY)
   if (token) return
 

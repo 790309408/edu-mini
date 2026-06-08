@@ -50,6 +50,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { onShareAppMessage, onShareTimeline } from '@dcloudio/uni-app'
 import { guardedOnLoad } from '@/utils/auth-guard'
 import CommonVideo from '@/components/common-video.vue'
 import type { VideoItem } from '@/components/common-video.vue'
@@ -60,8 +61,11 @@ import {
   getVideoList,
   reportWatchFinish,
   getQrcodeListByType,
+  getShareConfig,
+  bindUser,
   redeemCode as apiRedeemCode,
   type VideoApiItem,
+  type ShareConfig,
 } from '@/apis'
 import { useTheme } from '@/utils/theme'
 
@@ -74,6 +78,8 @@ const videoList = ref<VideoItem[]>([])
 const initialIndex = ref(0)
 /** 当前分类 ID */
 const currentTypeId = ref<number | undefined>(undefined)
+/** 当前课程封面图（用于分享） */
+const courseCover = ref('')
 /** 页面参数中是否显式指定了 index */
 let hasExplicitIndex = false
 /** 免费次数用完弹框 */
@@ -127,9 +133,34 @@ async function fetchVideoList(typeId: number) {
   }
 }
 
+/** 处理分享进入时的用户绑定逻辑 */
+async function handleShareBind(bindUserId: string | number) {
+  const userInfo = uni.getStorageSync('wx_user_info') as any
+  const currentUserId = userInfo && userInfo.userId
+  if (!currentUserId) return
+  // 自己分享给自己无需绑定
+  if (String(currentUserId) === String(bindUserId)) return
+  try {
+    await bindUser(currentUserId, bindUserId)
+  } catch (e) {
+    console.error('绑定分享用户失败:', e)
+  }
+}
+
 guardedOnLoad((query) => {
+  // 兼容小程序码 scene 传参（如 {"scene":"typeId=4"}）
+  if (query?.scene) {
+    const sceneStr = decodeURIComponent(query.scene as string)
+    sceneStr.split('&').forEach((pair) => {
+      const [key, val] = pair.split('=')
+      if (key && val && !(key in (query as any))) {
+        ;(query as any)[key] = val
+      }
+    })
+  }
+  console.log('query11', JSON.stringify(query))
   // 从页面参数获取初始索引：仅当指定为大于 0 的有效索引时才视为显式指定，
-  // 避免传 index=0 时覆盖掉“第一个未完成”的默认策略
+  // 避免传 index=0 时覆盖掉"第一个未完成"的默认策略
   if (query?.index != null && query.index !== '') {
     const idx = Number(query.index)
     if (Number.isFinite(idx) && idx > 0) {
@@ -143,6 +174,10 @@ guardedOnLoad((query) => {
     currentTypeId.value = typeId
     fetchVideoList(typeId)
   }
+  // 从分享链接进入：携带 userId 时调用绑定接口
+  if (query && query.userId) {
+    handleShareBind(query.userId)
+  }
   // 非 VIP 时预获取免费领取二维码数据
   const userInfo0 = uni.getStorageSync('wx_user_info') as any
   if (userInfo0 && (userInfo0.vip === false || userInfo0.vipType === 0)) {
@@ -151,6 +186,10 @@ guardedOnLoad((query) => {
   }
   // 每打开一个视频页面，扣减一次观看次数
   doDeduct()
+  // 获取分享配置
+  fetchShareConfig()
+  // 读取当前课程封面（首页跳转前已写入）
+  courseCover.value = uni.getStorageSync('video_course_cover') || ''
 })
 
 /**
@@ -263,6 +302,8 @@ function onPlayBlocked() {
 
 function onChange(index: number) {
   console.log('切换到视频:', index)
+  // 每次切换视频扣减一次观看次数
+  doDeduct()
 }
 
 /** 上报视频观看完成 */
@@ -297,6 +338,59 @@ function onEnded(index: number) {
   console.log('视频播放完成:', index)
   reportWatchFinished(index)
 }
+
+/** 分享配置（从接口获取） */
+const shareConfig = ref<ShareConfig | null>(null)
+
+/** 获取分享配置 */
+async function fetchShareConfig() {
+  try {
+    const data = await getShareConfig()
+    if (data) {
+      shareConfig.value = data
+    }
+  } catch (e) {
+    console.error('获取分享配置失败:', e)
+  }
+}
+
+/** 分享给好友（微信分享回调） */
+onShareAppMessage(() => {
+  const userInfo = uni.getStorageSync('wx_user_info') as any
+  const userId = userInfo && userInfo.userId ? userInfo.userId : ''
+  const friend = shareConfig.value?.friend
+  const typeId = currentTypeId.value || ''
+  // 分享链接直接打开课程页，携带 userId 用于绑定 + typeId 定位课程
+  const params = [
+    typeId ? `typeId=${typeId}` : '',
+    userId ? `userId=${userId}` : '',
+  ]
+    .filter(Boolean)
+    .join('&')
+  return {
+    title: friend?.title || '宝宝爱听 — 免费儿童教育视频',
+    desc: friend?.desc || '',
+    path: params ? `/pages/video/index?${params}` : '/pages/video/index',
+    imageUrl: courseCover.value || friend?.imageUrl || '',
+  }
+})
+
+/** 分享到朋友圈 */
+onShareTimeline(() => {
+  const userInfo = uni.getStorageSync('wx_user_info') as any
+  const userId = userInfo && userInfo.userId ? userInfo.userId : ''
+  const timeline = shareConfig.value?.timeline
+  const typeId = currentTypeId.value || ''
+  const parts = [
+    typeId ? `typeId=${typeId}` : '',
+    userId ? `userId=${userId}` : '',
+  ].filter(Boolean)
+  return {
+    title: timeline?.title || '宝宝爱听 — 免费儿童教育视频',
+    query: parts.join('&'),
+    imageUrl: courseCover.value || timeline?.imageUrl || '',
+  }
+})
 </script>
 
 <style lang="less" scoped>

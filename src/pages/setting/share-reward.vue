@@ -126,7 +126,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { onShareAppMessage, onShareTimeline } from '@dcloudio/uni-app'
+import { onShow, onShareAppMessage, onShareTimeline } from '@dcloudio/uni-app'
 import { guardedOnShow } from '@/utils/auth-guard'
 import {
   getBindCount,
@@ -193,7 +193,7 @@ async function fetchShareConfig() {
 /** 获取二维码（type=1） */
 async function fetchFreeQrcode() {
   try {
-    const data = await getQrcodeListByType(1)
+    const data = await getQrcodeListByType(2)
     if (!data || !data.length) return
     const images = data[0].images || []
     if (images.length) freeQrcodeUrl.value = images[0].imageUrl || ''
@@ -202,10 +202,21 @@ async function fetchFreeQrcode() {
   }
 }
 
-guardedOnShow(() => {
+/** 刷新所有数据 */
+function refreshAll() {
   fetchBindCount()
   fetchShareConfig()
   fetchFreeQrcode()
+}
+
+// 原生 onShow：立即刷新，不等待鉴权
+onShow(() => {
+  refreshAll()
+})
+
+// guardedOnShow：鉴权完成后再次刷新，确保数据最新
+guardedOnShow(() => {
+  refreshAll()
 })
 
 /** 返回 */

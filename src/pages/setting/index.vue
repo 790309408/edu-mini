@@ -156,6 +156,7 @@ import {
   type ShareConfig,
 } from '@/apis'
 import type { LoginResult } from '@/apis'
+import { getUserInfo } from '@/utils/auth'
 
 const { themeVars } = useTheme()
 
@@ -300,7 +301,12 @@ async function onRedeemConfirm(code: string) {
     showFreeDialog.value = false
     inputCode.value = ''
     uni.showToast({ title: '兑换成功', icon: 'success' })
-    // 刷新用户信息
+    // 从服务端重新拉取最新用户信息（vip / vipType / freeViewRemain 等）
+    try {
+      await getUserInfo()
+    } catch (refreshErr) {
+      console.error('兑换后刷新用户信息失败:', refreshErr)
+    }
     loadUserInfo()
   } catch (err: any) {
     uni.showToast({

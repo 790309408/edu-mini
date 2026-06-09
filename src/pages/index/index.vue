@@ -386,9 +386,20 @@ const freeTextContent = ref('')
 const freeQrcodeUrl = ref('')
 /** 关闭 free-dialog 后是否弹出 share-dialog */
 const pendingShareDialog = ref(false)
+/** share-dialog 兜底定时器（free-dialog 未弹出时直接弹出 share-dialog） */
+let shareDialogFallbackTimer: ReturnType<typeof setTimeout> | null = null
+
+/** 取消兜底定时器 */
+function cancelShareFallbackTimer() {
+  if (shareDialogFallbackTimer) {
+    clearTimeout(shareDialogFallbackTimer)
+    shareDialogFallbackTimer = null
+  }
+}
 
 /** free-dialog 关闭后，延迟弹出 share-dialog */
 function onFreeDialogClose() {
+  cancelShareFallbackTimer()
   if (pendingShareDialog.value) {
     pendingShareDialog.value = false
     setTimeout(() => {
@@ -440,14 +451,23 @@ function isUserVip(): boolean {
 /** 本地存储 key：记录当前应取的二维码下标，每次冷启动循环递增 */
 const QRCODE_INDEX_KEY = 'free_qrcode_index'
 
-/** 获取非会员免费领取二维码弹框数据 */
+/** 获取非会员免费领取二维码弹框数据，并处理 share-dialog 兜底 */
 async function fetchFreeQrcode() {
+  // 非会员：标记关闭 free-dialog 后弹出 share-dialog
+  pendingShareDialog.value = true
+
   try {
     const data = await getQrcodeListByType(1)
-    if (!data || !data.length) return
+    if (!data || !data.length) {
+      triggerShareDialogFallback()
+      return
+    }
     const item = data[0]
     const images = item.images || []
-    if (!images.length) return
+    if (!images.length) {
+      triggerShareDialogFallback()
+      return
+    }
 
     // 读取上次缓存的下标，超出范围自动取模
     let idx = Number(uni.getStorageSync(QRCODE_INDEX_KEY)) || 0
@@ -462,12 +482,31 @@ async function fetchFreeQrcode() {
     const nextIdx = (idx + 1) % images.length
     uni.setStorageSync(QRCODE_INDEX_KEY, nextIdx)
 
+    // 弹出 free-dialog，关闭后再弹 share-dialog
+    cancelShareFallbackTimer()
     showFreeDialog.value = true
-    // 标记关闭后弹出分享弹框
-    pendingShareDialog.value = true
   } catch (e) {
     console.error('获取免费领取二维码失败:', e)
+    triggerShareDialogFallback()
   }
+}
+
+/** 非永久会员（vipType 1-4）：直接弹出 share-dialog */
+function showShareDialogForTempVip() {
+  setTimeout(() => {
+    showShareDialog.value = true
+  }, 800)
+}
+
+/** 兜底：free-dialog 未能弹出时，直接弹出 share-dialog */
+function triggerShareDialogFallback() {
+  cancelShareFallbackTimer()
+  shareDialogFallbackTimer = setTimeout(() => {
+    if (!showFreeDialog.value && pendingShareDialog.value) {
+      pendingShareDialog.value = false
+      showShareDialog.value = true
+    }
+  }, 2000)
 }
 
 /** 处理分享进入时的用户绑定逻辑 */
@@ -530,12 +569,19 @@ guardedOnLoad((query) => {
     fetchTabs()
   }
   const userInfo = uni.getStorageSync('wx_user_info') as any
-  if (userInfo && (userInfo.vip === false || userInfo.vipType === 0)) {
-    // 剩余试看次数从用户信息 freeViewRemain 获取
+  const vipType = userInfo ? Number(userInfo.vipType) : 0
+  const isVip = userInfo && userInfo.vip === true && vipType > 0
+
+  if (userInfo && !isVip) {
+    // 非会员：弹出免费领取弹框（free-dialog）+ 关闭后弹 share-dialog
     remainCount.value = Number(userInfo.freeViewRemain) || 0
     fetchFreeQrcode()
-    // 提前加载 VIP 引流弹框数据，点击 VIP 课程时可立即展示
     fetchVipQrcode()
+  } else if (userInfo && isVip && vipType !== 5) {
+    // 非永久会员（vipType 1-4）：只弹 share-dialog
+    remainCount.value = Number(userInfo.freeViewRemain) || 0
+    fetchVipQrcode()
+    showShareDialogForTempVip()
   }
   // 从分享链接进入：携带 userId 时调用绑定接口
   if (query && query.userId) {

@@ -102,7 +102,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { onShareAppMessage, onShareTimeline } from '@dcloudio/uni-app'
+import { onShow, onShareAppMessage, onShareTimeline } from '@dcloudio/uni-app'
 import { guardedOnShow } from '@/utils/auth-guard'
 import {
   getBindCount,
@@ -193,11 +193,21 @@ function formatTime(timeStr: string) {
   return `${y}-${m}-${day}`
 }
 
-// 页面显示时拉取数据
-guardedOnShow(() => {
+/** 刷新所有数据 */
+function refreshAll() {
   fetchBindCount()
   fetchShareConfig()
   fetchInvitedList()
+}
+
+// 原生 onShow：立即刷新，不等待鉴权
+onShow(() => {
+  refreshAll()
+})
+
+// guardedOnShow：鉴权完成后再次刷新，确保数据最新
+guardedOnShow(() => {
+  refreshAll()
 })
 
 /** 返回 */

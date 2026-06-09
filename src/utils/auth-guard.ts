@@ -39,10 +39,11 @@ export async function ensureAuth(bindUserId?: string | number): Promise<void> {
  */
 export function guardedOnLoad(callback?: (query?: Record<string, any>) => void) {
   onLoad(async (query) => {
-    // 从页面参数中提取 userId 作为 bindUserId（分享链接进入场景）
-    const bindUserId = query && (query as any).userId
+    // 在 await 之前将 query 解构为普通对象，避免 async 函数中失去响应式上下文
+    const plainQuery = query ? { ...query } : undefined
+    const bindUserId = plainQuery && (plainQuery as any).userId
     await ensureAuth(bindUserId)
-    callback?.(query)
+    callback?.(plainQuery)
   })
 }
 

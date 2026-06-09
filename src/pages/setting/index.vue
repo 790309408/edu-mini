@@ -145,7 +145,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { onShareAppMessage } from '@dcloudio/uni-app'
+import { onShow, onShareAppMessage } from '@dcloudio/uni-app'
 import { useTheme } from '@/utils/theme'
 import FreeDialog from '@/components/free-dialog.vue'
 import VipDialog from '@/components/vip-dialog.vue'
@@ -252,11 +252,21 @@ async function loadShareConfig() {
   }
 }
 
-onMounted(() => {
+/** 刷新所有数据 */
+function refreshAll() {
   loadUserInfo()
   loadFreeQrcode()
   loadContactQrcode()
   loadShareConfig()
+}
+
+onMounted(() => {
+  refreshAll()
+})
+
+// 每次页面显示时刷新，确保从其他页面返回后数据最新
+onShow(() => {
+  refreshAll()
 })
 
 /** 返回 */

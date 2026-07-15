@@ -341,7 +341,7 @@ onShareAppMessage(() => {
   const id = userId.value
   const friend = shareConfig.value?.friend
   return {
-    title: friend?.title || '宝宝星盒 - 免费儿童教育资源',
+    title: friend?.title || '宝宝星盒 - 免费儿童启蒙动画绘本故事',
     desc: friend?.desc || '',
     path: id ? `/pages/index/index?inviterId=${id}` : '/pages/index/index',
     imageUrl: friend?.imageUrl || '',

@@ -16,46 +16,6 @@
           <text class="edit-hint">编辑</text>
           <view class="arrow-icon"></view>
         </view>
-
-        <!-- 会员权益面板 -->
-        <!-- <view class="vip-panel">
-          <view class="vip-header">
-            <text class="vip-icon">👑</text>
-            <view class="vip-info">
-              <text class="vip-title">VIP会员</text>
-              <text class="vip-account">账号：{{ userAccount }}</text>
-            </view>
-            <view class="vip-badge">
-              <text class="badge-text">有效期</text>
-            </view>
-          </view>
-
-          <view class="vip-benefits">
-            <view class="benefit-item">
-              <text class="benefit-icon">🎬</text>
-              <text class="benefit-text">免费观看4000+视频</text>
-            </view>
-            <view class="benefit-item">
-              <text class="benefit-icon">📥</text>
-              <text class="benefit-text">离线下载全部内容</text>
-            </view>
-            <view class="benefit-item">
-              <text class="benefit-icon">🚫</text>
-              <text class="benefit-text">无广告体验</text>
-            </view>
-            <view class="benefit-item">
-              <text class="benefit-icon">⏰</text>
-              <text class="benefit-text">优先看最新更新</text>
-            </view>
-          </view>
-
-          <view class="vip-action">
-            <button class="renew-btn" @tap="onRenewVip">
-              <text class="renew-btn-text">续费会员</text>
-            </button>
-          </view>
-        </view> -->
-
         <!-- 个人信息卡片 -->
         <view class="info-section">
           <!-- 我的邀请 -->
@@ -273,7 +233,12 @@ import {
   useTheme,
 } from '@/utils/theme'
 import NavBar from '@/components/nav-bar.vue'
-import { saveUserProfile, getBindCount, submitMessage } from '@/apis'
+import {
+  saveUserProfile,
+  getBindCount,
+  submitMessage,
+  uploadSingleImage,
+} from '@/apis'
 import type { LoginResult } from '@/apis'
 
 const { themeVars } = useTheme()
@@ -361,6 +326,10 @@ const onNicknameBlur = (e: any) => {
   }
 }
 
+/** 判断是否为本地临时路径（非网络地址） */
+const isLocalPath = (path: string) =>
+  path && !path.startsWith('http://') && !path.startsWith('https://')
+
 /** 保存资料 */
 const onSaveProfile = async () => {
   const nick = editNickname.value.trim()
@@ -373,29 +342,41 @@ const onSaveProfile = async () => {
 
   savingProfile.value = true
   try {
+    // 如果头像是本地临时路径，先上传到服务器
+    let uploadedAvatarUrl = avatar
+    if (avatar && avatar !== DEFAULT_AVATAR && isLocalPath(avatar)) {
+      uni.showLoading({ title: '上传头像中...' })
+      uploadedAvatarUrl = await uploadSingleImage(avatar)
+      uni.hideLoading()
+    }
+
     const params: {
       userId: number | string
       nickName?: string
       avatarUrl?: string
     } = { userId: userId.value }
     if (nick) params.nickName = nick
-    if (avatar && avatar !== DEFAULT_AVATAR) params.avatarUrl = avatar
+    if (uploadedAvatarUrl && uploadedAvatarUrl !== DEFAULT_AVATAR)
+      params.avatarUrl = uploadedAvatarUrl
 
     await saveUserProfile(params)
 
     // 更新缓存
     const cached = (uni.getStorageSync(USER_INFO_KEY) || {}) as LoginResult
     if (nick) cached.nickName = nick
-    if (avatar && avatar !== DEFAULT_AVATAR) cached.avatarUrl = avatar
+    if (uploadedAvatarUrl && uploadedAvatarUrl !== DEFAULT_AVATAR)
+      cached.avatarUrl = uploadedAvatarUrl
     uni.setStorageSync(USER_INFO_KEY, cached)
 
     // 更新页面显示
     if (nick) userNickname.value = nick
-    if (avatar && avatar !== DEFAULT_AVATAR) userAvatar.value = avatar
+    if (uploadedAvatarUrl && uploadedAvatarUrl !== DEFAULT_AVATAR)
+      userAvatar.value = uploadedAvatarUrl
 
     showProfileSheet.value = false
     uni.showToast({ title: '保存成功', icon: 'success' })
   } catch (err: any) {
+    uni.hideLoading()
     uni.showToast({
       title: err?.message || err?.msg || '保存失败',
       icon: 'none',

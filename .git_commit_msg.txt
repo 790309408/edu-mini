@@ -1,0 +1,8 @@
+feat: video page rebuild with progress memory, autoplay fix and ES2017 compat
+
+- Implement multi-video progress memory (up to 10 records)
+- Add autoplay with retry mechanism for real devices
+- Fix videoContext null: getCurrentInstance must be at module top level
+- Add esbuild target es2017 for WeChat mini-program ES2020 compat
+- Configure m-video plugin in manifest.json
+feat: add flash-card component and demo page, update config  

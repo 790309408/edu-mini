@@ -116,6 +116,9 @@
       content="恭喜您，兑换码已成功兑换，快去畅享精彩内容吧！"
     />
 
+    <!-- 悬浮搜索按钮 -->
+    <float-search-btn />
+
     <!-- VIP 引流弹框：点击 VIP 课程且非会员时弹出 -->
     <vip-dialog
       v-model:visible="showVipDialog"
@@ -148,6 +151,7 @@ import FreeDialog from '@/components/free-dialog.vue'
 import ShareDialog from '@/components/share-dialog.vue'
 import SuccessDialog from '@/components/success-dialog.vue'
 import VipDialog from '@/components/vip-dialog.vue'
+import FloatSearchBtn from '@/components/float-search-btn.vue'
 
 import { getUserInfo } from '@/utils/auth'
 import { useTheme } from '@/utils/theme'
@@ -678,7 +682,7 @@ onShareAppMessage(() => {
   const userId = userInfo && userInfo.userId ? userInfo.userId : ''
   const friend = shareConfig.value?.friend
   return {
-    title: friend?.title || '宝宝爱听 — 免费儿童教育视频',
+    title: friend?.title || '宝宝星盒 - 免费儿童启蒙动画绘本故事',
     desc: friend?.desc || '',
     path: userId ? `/pages/index/index?userId=${userId}` : '/pages/index/index',
     imageUrl: friend?.imageUrl || '',
@@ -691,7 +695,7 @@ onShareTimeline(() => {
   const userId = userInfo && userInfo.userId ? userInfo.userId : ''
   const timeline = shareConfig.value?.timeline
   return {
-    title: timeline?.title || '宝宝爱听 — 免费儿童教育视频',
+    title: timeline?.title || '宝宝星盒 - 免费儿童启蒙动画绘本故事',
     query: userId ? `userId=${userId}` : '',
     imageUrl: timeline?.imageUrl || '',
   }

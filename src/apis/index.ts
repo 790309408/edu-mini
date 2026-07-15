@@ -5,6 +5,8 @@
 
 import { get, post, del } from '@/utils/request'
 
+const BASE_URL = 'https://babytime.top'
+
 // ============ 类型定义 ============
 
 /** 微信登录返回结构 */
@@ -248,4 +250,63 @@ export function saveUserProfile(params: {
   avatarUrl?: string
 }) {
   return post('/app/user/profile', params, { showLoading: true, loadingText: '保存中...' })
+}
+
+// ============ 上传 ============
+
+/**
+ * 上传单张图片
+ * POST /vod/upload/images  (multipart/form-data)
+ * 免鉴权
+ */
+export function uploadSingleImage(filePath: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    uni.uploadFile({
+      url: BASE_URL + '/vod/upload/images',
+      filePath,
+      name: 'files',
+      formData: {
+        title: '用户头像',
+        tags: 'avatar',
+        desc: '用户上传头像',
+      },
+      success: (res) => {
+        try {
+          const body = JSON.parse(res.data)
+          if (body.code === 200 && body.data) {
+            resolve(body.data as string)
+          } else {
+            reject(new Error(body.message || '图片上传失败'))
+          }
+        } catch {
+          reject(new Error('解析上传响应失败'))
+        }
+      },
+      fail: (err) => {
+        reject(new Error(err.errMsg || '网络异常，上传失败'))
+      },
+    })
+  })
+}
+
+// ============ 搜索 ============
+
+/** 搜索课程结果项（与 CategoryItem 结构一致） */
+export interface SearchResultItem {
+  id: number
+  name: string
+  totalEpisodes: number
+  cover: string
+  contentType: number
+  isVip: number
+  content: string
+}
+
+/** 搜索课程 */
+export function searchCourse(keyword: string, userId?: number | string) {
+  const params: Record<string, any> = { keyword }
+  if (userId !== undefined && userId !== null && userId !== '') {
+    params.userId = userId
+  }
+  return get<SearchResultItem[]>('/app/search/course', params, { showLoading: false })
 }

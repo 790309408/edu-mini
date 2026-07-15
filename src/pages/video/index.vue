@@ -16,11 +16,11 @@
           :show-casting-button="true"
           :enable-auto-rotation="false"
           :show-screen-lock-button="false"
-          :show-background-playback-button="true"
+          :show-background-playback-button="false"
           :controls="false"
           :enable-progress-gesture="false"
           :preferred-peak-bit-rate="-1"
-          :showCustomCenterPlayBtn="true"
+          :showCustomCenterPlayBtn="false"
           :loop="true"
           @play="onPlay"
           @pause="onPause"
@@ -56,8 +56,17 @@
           class="center-play-btn"
           @tap.stop="onCenterBtnTap"
         >
-          <view class="center-play-circle">
-            <text class="center-play-icon">{{ isPlaying ? '⏸' : '▶' }}</text>
+          <view
+            :key="centerBounceKey"
+            class="center-play-circle center-bounce-anim"
+          >
+            <!-- 播放三角形 -->
+            <view v-if="!isPlaying" class="css-play-icon" />
+            <!-- 暂停双竖条 -->
+            <view v-else class="css-pause-icon">
+              <view class="pause-bar" />
+              <view class="pause-bar" />
+            </view>
           </view>
         </view>
 
@@ -101,7 +110,7 @@
           <view class="progress-bar__mask" />
           <view class="progress-bar__content">
             <text class="progress-bar__time progress-bar__time--current">{{
-              formatTime(currentTime)
+              formatTime(isProgressDragging ? dragTime : currentTime)
             }}</text>
             <view
               class="progress-bar__track"
@@ -113,6 +122,7 @@
               <view class="progress-bar__bg" />
               <view
                 class="progress-bar__fill"
+                :class="{ 'progress-bar__fill--dragging': isProgressDragging }"
                 :style="{ width: progressPercent + '%' }"
               />
               <view
@@ -371,9 +381,11 @@ let centerBtnTimer: ReturnType<typeof setTimeout> | null = null
 const isCasting = ref(false)
 const supportCasting = ref(false)
 const showDevToolsTip = ref(false)
+const centerBounceKey = ref(0)
 // 全屏相关已移除
 
 const isProgressDragging = ref(false)
+const dragTime = ref(0)
 let progressTouchStartX = 0
 let progressTouchStartPercent = 0
 /** 节流保存进度的时间戳（每 5 秒保存一次） */
@@ -566,22 +578,18 @@ function onLoadedMetadata(e: any) {
 }
 
 function onTimeUpdate(e: any) {
-  const d = e?.detail ?? e
+  const d = e?.detail?.detail ?? e
   if (!d) return
   const dur = Number(
     d.duration ?? d.totalTime ?? d.videoDuration ?? d.total ?? d.data?.duration,
   )
   if (!isNaN(dur) && dur > 0) duration.value = dur
+  // 拖拽期间跳过更新，避免与拖拽计算值冲突导致进度条抖动
+  if (isProgressDragging.value) return
   const cur = Number(
     d.currentTime ?? d.position ?? d.currentPosition ?? d.data?.currentTime,
   )
   if (!isNaN(cur) && cur >= 0) currentTime.value = cur
-  // 节流保存进度，每 5 秒持久化一次
-  const now = Date.now()
-  if (now - lastProgressSaveTime > 5000) {
-    lastProgressSaveTime = now
-    saveProgress()
-  }
 }
 
 function onVideoError(e: any) {
@@ -703,7 +711,8 @@ function formatTime(seconds: number): string {
 
 const progressPercent = computed(() => {
   if (!duration.value || duration.value <= 0) return 0
-  return Math.min((currentTime.value / duration.value) * 100, 100)
+  const t = isProgressDragging.value ? dragTime.value : currentTime.value
+  return Math.min((t / duration.value) * 100, 100)
 })
 
 const PROGRESS_MARGIN_VW = 2.4
@@ -720,6 +729,7 @@ function onProgressTrackTap(e: any) {
 
 function onProgressTouchStart(e: any) {
   isProgressDragging.value = true
+  dragTime.value = currentTime.value
   clearControlsTimer()
   const touch = e.touches[0]
   progressTouchStartX = touch.clientX
@@ -737,18 +747,20 @@ function onProgressTouchMove(e: any) {
     0,
     Math.min(100, progressTouchStartPercent + deltaPercent),
   )
-  currentTime.value = (newPercent / 100) * duration.value
+  dragTime.value = (newPercent / 100) * duration.value
 }
 
 function onProgressTouchEnd() {
   if (!isProgressDragging.value) return
-  seekTo(currentTime.value)
+  seekTo(dragTime.value)
+  currentTime.value = dragTime.value
   isProgressDragging.value = false
   startControlsTimer()
 }
 
 function seekTo(time: number) {
   try {
+    console.log('[seek] time:', time)
     const ctx = initVideoContext()
     ctx?.video?.seek(time)
   } catch (_e) {
@@ -782,6 +794,8 @@ function onContainerTap() {
 function onCenterBtnTap() {
   togglePlayPause()
   if (showControls.value) startControlsTimer()
+  // 递增 key 强制重建元素，触发 CSS 弹跳动画
+  centerBounceKey.value++
 }
 
 function goBack() {
@@ -962,6 +976,7 @@ function onCastingUserSelect(e: any) {
 }
 
 function onCastingStateChange(e: any) {
+  console.log('[casting] 状态变化:', e.detail)
   const state = e.detail?.state
   if (state === 'connecting' || state === 'connected') {
     isCasting.value = true
@@ -1173,7 +1188,7 @@ onShareAppMessage(() => {
     .filter(Boolean)
     .join('&')
   return {
-    title: friend?.title || '宝宝爱听 — 免费儿童教育视频',
+    title: friend?.title || '宝宝星盒 - 免费儿童启蒙动画视频',
     desc: friend?.desc || '',
     path: params ? `/pages/video/index?${params}` : '/pages/video/index',
     imageUrl: courseCover.value || friend?.imageUrl || '',
@@ -1190,7 +1205,7 @@ onShareTimeline(() => {
     userId ? `userId=${userId}` : '',
   ].filter(Boolean)
   return {
-    title: timeline?.title || '宝宝爱听 — 免费儿童教育视频',
+    title: timeline?.title || '宝宝星盒 - 免费儿童启蒙动画视频',
     query: parts.join('&'),
     imageUrl: courseCover.value || timeline?.imageUrl || '',
   }
@@ -1245,17 +1260,56 @@ onShareTimeline(() => {
   z-index: 20;
 }
 .center-play-circle {
-  width: 14vw;
-  height: 14vw;
+  width: 9.6vw;
+  height: 9.6vw;
   border-radius: 50%;
-  background-color: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.3);
   display: flex;
   align-items: center;
   justify-content: center;
+  position: relative;
+}
+.center-bounce-anim {
+  animation: centerBounce 0.4s ease-out;
+}
+@keyframes centerBounce {
+  0% {
+    transform: scale(1);
+  }
+  25% {
+    transform: scale(0.78);
+  }
+  55% {
+    transform: scale(1.12);
+  }
+  80% {
+    transform: scale(0.95);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+.css-play-icon {
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 1.2vw 0 1.2vw 2vw;
+  border-color: transparent transparent transparent rgba(255, 255, 255, 0.85);
+  margin-left: 0.4vw;
+}
+.css-pause-icon {
+  display: flex;
+  gap: 0.8vw;
+}
+.pause-bar {
+  width: 0.6vw;
+  height: 2.4vw;
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 0.2vw;
 }
 .center-play-icon {
-  font-size: 5.333vw;
-  color: #fff;
+  font-size: 3.733vw;
+  color: rgba(255, 255, 255, 0.8);
   line-height: 1;
 }
 .devtools-tip {
@@ -1623,6 +1677,9 @@ onShareTimeline(() => {
   background: linear-gradient(to right, var(--theme-start), var(--theme-end));
   border-radius: 0.6vw;
   transition: width 0.15s linear;
+}
+.progress-bar__fill--dragging {
+  transition: none;
 }
 .progress-bar__thumb {
   position: absolute;

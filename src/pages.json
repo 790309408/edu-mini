@@ -3,6 +3,7 @@
     {
       "path": "pages/index/index",
       "style": {
+        "navigationBarTitleText": "宝宝星盒 - 儿童启蒙动画绘本故事",
         "navigationStyle": "custom",
         "pageOrientation": "landscape"
       }
@@ -10,6 +11,7 @@
     {
       "path": "pages/video/index",
       "style": {
+        "navigationBarTitleText": "宝宝星盒 - 免费儿童教育视频播放",
         "navigationStyle": "custom",
         "pageOrientation": "landscape"
       }
@@ -17,6 +19,7 @@
     {
       "path": "pages/setting/index",
       "style": {
+        "navigationBarTitleText": "宝宝星盒 - 设置与个人中心",
         "navigationStyle": "custom",
         "pageOrientation": "landscape"
       }
@@ -24,6 +27,7 @@
     {
       "path": "pages/article/index",
       "style": {
+        "navigationBarTitleText": "宝宝星盒 - 儿童绘本故事图文",
         "navigationStyle": "custom",
         "pageOrientation": "portrait"
       }
@@ -31,6 +35,7 @@
     {
       "path": "pages/setting/personal-center",
       "style": {
+        "navigationBarTitleText": "宝宝星盒 - 个人中心",
         "navigationStyle": "custom",
         "pageOrientation": "portrait"
       }
@@ -38,6 +43,7 @@
     {
       "path": "pages/setting/invite-list",
       "style": {
+        "navigationBarTitleText": "宝宝星盒 - 邀请好友记录",
         "navigationStyle": "custom",
         "pageOrientation": "portrait"
       }
@@ -45,6 +51,7 @@
     {
       "path": "pages/setting/my-messages",
       "style": {
+        "navigationBarTitleText": "宝宝星盒 - 我的留言",
         "navigationStyle": "custom",
         "pageOrientation": "portrait"
       }
@@ -52,6 +59,7 @@
     {
       "path": "pages/setting/share-reward",
       "style": {
+        "navigationBarTitleText": "宝宝星盒 - 分享奖励",
         "navigationStyle": "custom",
         "pageOrientation": "landscape"
       }
@@ -59,6 +67,15 @@
     {
       "path": "pages/setting/disclaimer",
       "style": {
+        "navigationBarTitleText": "宝宝星盒 - 免责声明",
+        "navigationStyle": "custom",
+        "pageOrientation": "portrait"
+      }
+    },
+    {
+      "path": "pages/search/index",
+      "style": {
+        "navigationBarTitleText": "宝宝星盒 - 搜索",
         "navigationStyle": "custom",
         "pageOrientation": "portrait"
       }
@@ -66,7 +83,7 @@
   ],
   "globalStyle": {
     "navigationBarTextStyle": "black",
-    "navigationBarTitleText": "童趣乐园-儿童启蒙动画绘本",
+    "navigationBarTitleText": "宝宝星盒 - 儿童启蒙动画绘本故事早教视频",
     "navigationBarBackgroundColor": "#F8F8F8",
     "backgroundColor": "#F8F8F8",
     "pageOrientation": "landscape",

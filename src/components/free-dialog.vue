@@ -44,7 +44,7 @@
           </view>
           <view class="qrcode-label">
             <text class="qrcode-label-line">长按识别二维码</text>
-            <text class="qrcode-label-line">加老师免费领取兑换码</text>
+            <text class="qrcode-label-line">添加老师免费领取会员兑换码</text>
           </view>
         </view>
 

@@ -230,7 +230,7 @@ onShareAppMessage(() => {
   const userId = userInfo && userInfo.userId ? userInfo.userId : ''
   const friend = shareConfig.value?.friend
   return {
-    title: friend?.title || '宝宝爱听 — 免费儿童教育视频',
+    title: friend?.title || '宝宝星盒 - 免费儿童启蒙动画绘本故事',
     desc: friend?.desc || '',
     path: userId ? `/pages/index/index?userId=${userId}` : '/pages/index/index',
     imageUrl: friend?.imageUrl || '',
@@ -243,7 +243,7 @@ onShareTimeline(() => {
   const userId = userInfo && userInfo.userId ? userInfo.userId : ''
   const timeline = shareConfig.value?.timeline
   return {
-    title: timeline?.title || '宝宝爱听 — 免费儿童教育视频',
+    title: timeline?.title || '宝宝星盒 - 免费儿童启蒙动画绘本故事',
     query: userId ? `userId=${userId}` : '',
     imageUrl: timeline?.imageUrl || '',
   }

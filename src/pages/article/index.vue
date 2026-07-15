@@ -1,7 +1,15 @@
 <template>
   <view class="page" :style="themeVars">
-    <!-- 通用导航栏 -->
-    <NavBar :title="title" @back="onBack" />
+    <!-- 顶部导航栏 -->
+    <view class="nav-bar" :style="{ paddingTop: statusBarHeight + 'px' }">
+      <view class="nav-content">
+        <view class="nav-back" @tap="onBack">
+          <view class="back-arrow"></view>
+        </view>
+        <text class="nav-title">{{ title }}</text>
+        <view class="nav-placeholder"></view>
+      </view>
+    </view>
 
     <!-- 富文本内容区 -->
     <scroll-view scroll-y class="content-scroll" :show-scrollbar="true">
@@ -37,9 +45,26 @@ import { onShareAppMessage, onShareTimeline } from '@dcloudio/uni-app'
 import { guardedOnLoad } from '@/utils/auth-guard'
 import { useTheme } from '@/utils/theme'
 import { getShareConfig, getCategoryList, type ShareConfig } from '@/apis'
-import NavBar from '@/components/nav-bar.vue'
 
 const { themeVars } = useTheme()
+
+/** 状态栏高度，iOS 上 getWindowInfo 可能返回 0，需多策略兼容 */
+const statusBarHeight = ref(45)
+try {
+  const sysInfo = uni.getSystemInfoSync()
+  const h = sysInfo.statusBarHeight
+  if (h && h > 0) {
+    statusBarHeight.value = h
+  } else {
+    const winInfo = uni.getWindowInfo()
+    const wh = winInfo.statusBarHeight
+    if (wh && wh > 0) {
+      statusBarHeight.value = wh
+    }
+  }
+} catch (_e) {
+  // 获取失败时保持默认 45px
+}
 
 interface ContentBlock {
   type: 'html' | 'image'
@@ -214,7 +239,7 @@ onShareAppMessage(() => {
     userId ? `userId=${userId}` : '',
   ].filter(Boolean)
   return {
-    title: friend?.title || title.value || '宝宝爱听 — 免费儿童教育视频',
+    title: friend?.title || title.value || '宝宝星盒 - 免费儿童绘本故事',
     desc: friend?.desc || '',
     path: parts.length
       ? `/pages/index/index?${parts.join('&')}`
@@ -234,7 +259,7 @@ onShareTimeline(() => {
     userId ? `userId=${userId}` : '',
   ].filter(Boolean)
   return {
-    title: timeline?.title || title.value || '宝宝爱听 — 免费儿童教育视频',
+    title: timeline?.title || title.value || '宝宝星盒 - 免费儿童绘本故事',
     query: parts.join('&'),
     imageUrl: timeline?.imageUrl || '',
   }
@@ -270,10 +295,54 @@ onShareTimeline(() => {
   }
 }
 
-// 竖屏顶部区域入场动画（应用于组件）
-:deep(.nav-status-bar),
-:deep(.nav-bar) {
+// 导航栏
+.nav-bar {
+  flex-shrink: 0;
+  background: #fff;
   animation: header-slide-in 0.5s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+.nav-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 90rpx;
+  padding: 0 24rpx;
+}
+
+.nav-back {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  &:active {
+    opacity: 0.5;
+  }
+}
+
+.back-arrow {
+  width: 10px;
+  height: 10px;
+  border-left: 2.2px solid #333;
+  border-bottom: 2.2px solid #333;
+  transform: rotate(45deg);
+  margin-left: 3px;
+}
+
+.nav-title {
+  font-size: 17px;
+  font-weight: 600;
+  color: #222;
+  max-width: 60%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nav-placeholder {
+  width: 32px;
 }
 
 @keyframes header-slide-in {

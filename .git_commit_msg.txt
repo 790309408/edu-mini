@@ -1,3 +1,9 @@
+feat: 优化视频页中央播放按钮样式与交互
+
+- 缩小按钮尺寸，优化渐变色背景与透明度
+- 新增点击弹跳动画(key强制重建方案)
+- 播放/暂停图标改为纯CSS绘制，解决emoji渲染不通透问题
+- 优化搜索页、用户中心、分享等多处功能改进
 feat: video page rebuild with progress memory, autoplay fix and ES2017 compat
 
 - Implement multi-video progress memory (up to 10 records)

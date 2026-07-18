@@ -21,7 +21,6 @@
           :enable-progress-gesture="false"
           :preferred-peak-bit-rate="-1"
           :showCustomCenterPlayBtn="false"
-          :loop="true"
           @play="onPlay"
           @pause="onPause"
           @ended="onEnded"
@@ -198,6 +197,19 @@
         </scroll-view>
       </view>
 
+      <!-- 播放模式切换开关（左侧视频区域） -->
+      <view v-if="showPlaylist" class="play-mode-switch" @tap.stop>
+        <text class="play-mode-label">{{
+          autoPlayNext ? '自动下一集' : '循环当前集'
+        }}</text>
+        <switch
+          class="play-mode-toggle"
+          :checked="autoPlayNext"
+          @change="onAutoPlayNextChange"
+          color="var(--theme-end)"
+        />
+      </view>
+
       <!-- 倍速选择面板 -->
       <view
         v-if="showSpeedPanel"
@@ -278,7 +290,13 @@ import {
   getCurrentInstance,
   nextTick,
 } from 'vue'
-import { onShareAppMessage, onShareTimeline, onLoad } from '@dcloudio/uni-app'
+import {
+  onShareAppMessage,
+  onShareTimeline,
+  onLoad,
+  onShow,
+  onHide,
+} from '@dcloudio/uni-app'
 import { guardedOnLoad, ensureAuth } from '@/utils/auth-guard'
 import FreeDialog from '@/components/free-dialog.vue'
 import SuccessDialog from '@/components/success-dialog.vue'
@@ -371,6 +389,7 @@ const rawVideoList = ref<VideoApiItem[]>([])
 const videoList = ref<VideoItem[]>([])
 const initialIndex = ref(0)
 
+const autoPlayNext = ref(true) // true=自动下一集, false=循环当前集
 const showControls = ref(true)
 let controlsTimer: ReturnType<typeof setTimeout> | null = null
 const showSpeedPanel = ref(false)
@@ -380,6 +399,10 @@ const showCenterBtn = ref(false)
 let centerBtnTimer: ReturnType<typeof setTimeout> | null = null
 const isCasting = ref(false)
 const supportCasting = ref(false)
+/** 切集期间忽略投屏断开事件，避免 isCasting 被误清 */
+let switchingVideo = false
+/** 投屏保护时间戳（不受 onPlay 重置影响） */
+let castingProtectUntil = 0
 const showDevToolsTip = ref(false)
 const centerBounceKey = ref(0)
 // 全屏相关已移除
@@ -390,6 +413,13 @@ let progressTouchStartX = 0
 let progressTouchStartPercent = 0
 /** 节流保存进度的时间戳（每 5 秒保存一次） */
 let lastProgressSaveTime = 0
+
+// 自动切集相关
+let autoNextTriggered = false // 防止同一视频重复触发 triggerAutoNext
+let autoNextFromIndex = -1 // 记录触发自动下一集的视频索引，拦截旧事件
+let autoNextTimer: ReturnType<typeof setInterval> | null = null // 轮询定时器
+let skipProgressRestore = false // 自动切集时跳过进度恢复，让下一集从 0 开始
+let switchCooldownUntil = 0 // 切集冷却时间戳，期间忽略旧组件的延迟事件
 let screenWidth = 375
 try {
   screenWidth = uni.getSystemInfoSync().screenWidth
@@ -462,6 +492,7 @@ onLoad(async () => {
 
 onBeforeUnmount(() => {
   clearControlsTimer()
+  stopAutoNextPolling()
   saveProgress()
   if (isListenMode.value) {
     try {
@@ -470,6 +501,29 @@ onBeforeUnmount(() => {
       /* 静默忽略 */
     }
   }
+})
+
+/** 锁屏/切后台前记住投屏状态 */
+let wasCastingBeforeHide = false
+onHide(() => {
+  wasCastingBeforeHide = isCasting.value
+  console.log('[casting] onHide wasCasting:', wasCastingBeforeHide)
+})
+
+/** 从锁屏/后台返回时自动重新投屏 */
+onShow(() => {
+  if (wasCastingBeforeHide && !isCasting.value) {
+    console.log('[casting] onShow 自动重新投屏')
+    wasCastingBeforeHide = false
+    setTimeout(() => {
+      const ctx = initVideoContext()
+      const video = ctx && ctx.video
+      if (video) {
+        autoResumeCasting(video)
+      }
+    }, 1000)
+  }
+  wasCastingBeforeHide = false
 })
 
 function syncVideoList() {
@@ -590,6 +644,17 @@ function onTimeUpdate(e: any) {
     d.currentTime ?? d.position ?? d.currentPosition ?? d.data?.currentTime,
   )
   if (!isNaN(cur) && cur >= 0) currentTime.value = cur
+
+  // 接近结尾时自动下一集（兜底：防止 ended 事件不触发）
+  if (Date.now() < switchCooldownUntil || autoNextTriggered) return
+  if (
+    dur > 5 &&
+    cur > 1 &&
+    dur - cur < 2 &&
+    (autoNextFromIndex < 0 || autoNextFromIndex === currentIndex.value)
+  ) {
+    triggerAutoNext()
+  }
 }
 
 function onVideoError(e: any) {
@@ -871,6 +936,128 @@ function setSpeed(speed: number) {
 
 // ==================== 播放控制 ====================
 
+function stopAutoNextPolling() {
+  if (autoNextTimer) {
+    clearInterval(autoNextTimer)
+    autoNextTimer = null
+  }
+}
+
+function startAutoNextPolling() {
+  stopAutoNextPolling()
+  autoNextTimer = setInterval(() => {
+    if (Date.now() < switchCooldownUntil) return // 冷却期内等待
+    if (autoNextTriggered) {
+      stopAutoNextPolling()
+      return
+    }
+    const dur = duration.value
+    const cur = currentTime.value
+    if (
+      dur > 5 &&
+      cur > 1 &&
+      dur - cur < 2 &&
+      (autoNextFromIndex < 0 || autoNextFromIndex === currentIndex.value)
+    ) {
+      triggerAutoNext()
+      stopAutoNextPolling()
+    }
+  }, 1000)
+}
+
+function onAutoPlayNextChange(e: any) {
+  autoPlayNext.value = !!e.detail.value
+}
+
+/** 模拟 tap 点击视频区域，唤醒 m-video 插件重连投屏设备 */
+function simulateTapForCastingReconnect() {
+  try {
+    const query = uni.createSelectorQuery()
+    query
+      .select('.video-player')
+      .boundingClientRect((rect: any) => {
+        if (!rect) {
+          console.warn('[casting] 模拟tap: 未获取到视频区域')
+          return
+        }
+        const x = rect.left + rect.width / 2
+        const y = rect.top + rect.height / 2
+        console.log('[casting] 模拟tap点击:', x, y)
+        // #ifdef MP-WEIXIN
+        // 通过 wx 内部接口模拟触摸事件，唤醒插件投屏 UI
+        const pages = getCurrentPages()
+        const page = pages[pages.length - 1] as any
+        if (page && page.$vm) {
+          const evt = {
+            type: 'tap',
+            detail: { x, y },
+            touches: [{ clientX: x, clientY: y, pageX: x, pageY: y }],
+            changedTouches: [{ clientX: x, clientY: y, pageX: x, pageY: y }],
+            timeStamp: Date.now(),
+            target: { id: 'refVideo', dataset: {} },
+            currentTarget: { id: 'refVideo', dataset: {} },
+          }
+          // 直接触发 m-video 组件上的 tap
+          try {
+            const comp = page.$vm.$refs?.refVideo
+            if (comp && comp.$emit) {
+              comp.$emit('tap', evt)
+              console.log('[casting] 模拟tap: 已通过 $emit 触发')
+            }
+          } catch (_e) {}
+        }
+        // #endif
+      })
+      .exec()
+  } catch (e) {
+    console.warn('[casting] 模拟tap异常:', e)
+  }
+}
+
+function triggerAutoNext() {
+  if (autoNextTriggered) return
+  console.log(
+    '[autoNext] triggerAutoNext from index:',
+    currentIndex.value,
+    'autoPlayNext:',
+    autoPlayNext.value,
+  )
+  autoNextTriggered = true
+  autoNextFromIndex = currentIndex.value
+  if (autoPlayNext.value) {
+    // 自动播放下一集
+    const nextIndex = currentIndex.value + 1
+    if (nextIndex < videoList.value.length) {
+      // 投屏中：先模拟 tap 点击唤醒插件重连投屏设备
+      const wasCastingBeforeSwitch = isCasting.value
+      if (wasCastingBeforeSwitch) {
+        console.log('[casting] 自动切集前模拟tap重连投屏')
+        simulateTapForCastingReconnect()
+      }
+      isPlaying.value = false
+      currentTime.value = 0
+      clearProgressForCurrentVideo()
+      skipProgressRestore = true
+      console.log('[autoNext] switching to next index:', nextIndex)
+      reportWatchFinished(currentIndex.value)
+      switchVideo(nextIndex, true)
+    }
+  } else {
+    // 循环播放当前集：seek 回起点重新播放
+    autoNextTriggered = false
+    autoNextFromIndex = -1
+    currentTime.value = 0
+    const ctx = initVideoContext()
+    const video = ctx && ctx.video
+    if (video) {
+      try {
+        video.seek(0)
+        video.play()
+      } catch (_e) {}
+    }
+  }
+}
+
 function onPlay() {
   if (isPlayBlocked.value) {
     try {
@@ -880,7 +1067,42 @@ function onPlay() {
     return
   }
   isPlaying.value = true
+  // 新视频已开始播放，切集结束
+  switchingVideo = false
+  // 新视频开始播放后，清除旧视频的 ended 拦截标记
+  autoNextFromIndex = -1
   flashCenterBtn()
+  startAutoNextPolling()
+  // 安全兜底：8 秒后检查视频是否正常加载，异常时重试播放
+  const checkIndex = currentIndex.value
+  setTimeout(() => {
+    if (currentIndex.value !== checkIndex) return // 已切到别的视频
+    if (duration.value > 0) return // 视频正常加载
+    console.warn('[video] 视频 8s 未加载，重试播放')
+    videoContext = null
+    const ctx = initVideoContext()
+    const video = ctx && ctx.video
+    if (video) {
+      try {
+        video.play()
+      } catch (_e) {}
+    }
+  }, 8000)
+  // 投屏时启用后台音频，锁屏后尽量保持进程活跃以维持投屏连接
+  // 注意：requestBackgroundPlayback 与投屏可能冲突，仅在非投屏时使用
+  if (!isCasting.value && isListenMode.value) {
+    try {
+      const ctx = initVideoContext()
+      ctx?.video?.requestBackgroundPlayback()
+    } catch (_e) {}
+  }
+  // 投屏状态下，视频开始播放后延迟重新投屏（确保视频已稳定）
+  if (isCasting.value) {
+    setTimeout(() => {
+      const ctx = initVideoContext()
+      if (ctx?.video) autoResumeCasting(ctx.video)
+    }, 2000)
+  }
   if (playbackRate.value !== 1) {
     setTimeout(() => {
       const ctx = initVideoContext()
@@ -892,7 +1114,15 @@ function onPlay() {
 function onPause() {
   isPlaying.value = false
   flashCenterBtn()
+  stopAutoNextPolling()
   saveProgress()
+  // 非听视频模式下，投屏暂停时释放后台音频
+  if (!isListenMode.value && isCasting.value) {
+    try {
+      const ctx = initVideoContext()
+      ctx?.video?.exitBackgroundPlayback()
+    } catch (_e) {}
+  }
 }
 
 function togglePlayPause() {
@@ -921,13 +1151,29 @@ function flashCenterBtn() {
   }, 1500)
 }
 
-function switchVideo(index: number) {
+function switchVideo(index: number, fromAutoNext = false) {
   if (index === currentIndex.value) return
   if (isPlayBlocked.value) {
     onPlayBlocked()
     return
   }
+  switchingVideo = true
+  // 投屏保护 3 秒（独立于 switchingVideo，不受 onPlay 提前重置）
+  castingProtectUntil = Date.now() + 3000
+  // 安全超时：如果 onPlay 未触发，自动重置标记
+  setTimeout(() => {
+    switchingVideo = false
+  }, 10000)
   saveProgress()
+  stopAutoNextPolling()
+  autoNextTriggered = false
+  // 设置 3 秒冷却，防止旧组件销毁期间的延迟事件误触发自动切集
+  switchCooldownUntil = Date.now() + 3000
+  // 手动切集时清除旧 ended 拦截标记，并恢复进度恢复能力
+  if (!fromAutoNext) {
+    autoNextFromIndex = -1
+    skipProgressRestore = false
+  }
   currentIndex.value = index
   currentTime.value = 0
   duration.value = 0
@@ -978,6 +1224,14 @@ function onCastingUserSelect(e: any) {
 function onCastingStateChange(e: any) {
   console.log('[casting] 状态变化:', e.detail)
   const state = e.detail?.state
+  // 切集保护期内忽略断开状态变化，保留 isCasting 以便自动重新投屏
+  if (
+    Date.now() < castingProtectUntil &&
+    (state === 'disconnected' || state === 'none')
+  ) {
+    console.log('[casting] 保护期内忽略 disconnected 状态')
+    return
+  }
   if (state === 'connecting' || state === 'connected') {
     isCasting.value = true
   } else if (state === 'disconnected' || state === 'none') {
@@ -986,8 +1240,29 @@ function onCastingStateChange(e: any) {
 }
 
 function onCastingInterrupt(e: any) {
+  // 切集保护期内的断开事件是组件重建导致的，忽略它
+  if (Date.now() < castingProtectUntil) {
+    console.log('[casting] 保护期内忽略 castinginterrupt')
+    return
+  }
   isCasting.value = false
   uni.showToast({ title: '投屏已断开', icon: 'none' })
+}
+
+/** 切集后自动重新投屏（延迟确保视频已就绪） */
+function autoResumeCasting(video: any, attempt = 0) {
+  if (!isCasting.value) return
+  try {
+    video.startCasting()
+    console.log('[casting] 自动重新投屏成功, attempt:', attempt)
+  } catch (e: any) {
+    console.warn('[casting] startCasting 异常:', e?.message || e)
+    if (attempt < 8) {
+      setTimeout(() => autoResumeCasting(video, attempt + 1), 1500)
+    } else {
+      console.warn('[casting] 自动重新投屏失败，已达最大重试')
+    }
+  }
 }
 
 // 全屏相关已移除
@@ -1112,10 +1387,11 @@ async function reportWatchFinished(index: number) {
 }
 
 function onEnded() {
-  isPlaying.value = false
-  currentTime.value = 0
-  clearProgressForCurrentVideo()
-  reportWatchFinished(currentIndex.value)
+  // 冷却期内忽略（旧组件销毁延迟导致的 ended 事件）
+  if (Date.now() < switchCooldownUntil) return
+  // 拦截旧视频的 ended 事件（组件销毁延迟导致）
+  if (autoNextFromIndex >= 0 && autoNextFromIndex !== currentIndex.value) return
+  triggerAutoNext()
 }
 
 // ==================== Watchers ====================
@@ -1139,12 +1415,24 @@ watch(
       if (ctx && video) {
         try {
           video.play()
-          const savedTime = getSavedProgressTime()
-          if (savedTime > 0) {
-            video.seek(savedTime)
-            currentTime.value = savedTime
+          // 自动切集时跳过进度恢复，让下一集从 0 开始
+          if (!skipProgressRestore) {
+            const savedTime = getSavedProgressTime()
+            if (savedTime > 0) {
+              console.log('[watch] 恢复进度:', savedTime)
+              video.seek(savedTime)
+              currentTime.value = savedTime
+            }
+          } else {
+            console.log(
+              '[watch] skipProgressRestore=true，显式 seek(0)，从 0 开始',
+            )
+            video.seek(0)
+            currentTime.value = 0
           }
           if (playbackRate.value !== 1) ctx.playbackRate(playbackRate.value)
+          // 如果之前在投屏，延迟后自动重新投屏（确保视频已稳定播放）
+          setTimeout(() => autoResumeCasting(video), 1500)
         } catch (_e) {
           // play 调用失败也重试
           if (retryCount < 8) {
@@ -1430,6 +1718,27 @@ onShareTimeline(() => {
   position: relative;
   justify-content: flex-end;
   padding: 2vw 2.667vw 1.333vw;
+}
+.play-mode-switch {
+  position: absolute;
+  left: 2.4vw;
+  top: 2.4vw;
+  z-index: 15;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 1.2vw;
+  background: rgba(0, 0, 0, 0.45);
+  border-radius: 2vw;
+  padding: 1.2vw 2vw;
+}
+.play-mode-label {
+  font-size: 1.6vw;
+  color: rgba(255, 255, 255, 0.85);
+  white-space: nowrap;
+}
+.play-mode-toggle {
+  transform: scale(0.55);
 }
 .playlist-grip {
   position: absolute;

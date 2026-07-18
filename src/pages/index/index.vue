@@ -629,11 +629,12 @@ async function onRedeemConfirm(code: string) {
     try {
       await getUserInfo()
     } catch (refreshErr) {
-      console.error('兑换后刷新用户信息失败:', refreshErr)
+      console.log('兑换后刷新用户信息失败:', refreshErr)
     }
     showSuccessDialog.value = true
-  } catch (e) {
-    console.error('兑换失败:', e)
+  } catch (e: any) {
+    uni.showToast({ title: e?.message || '兑换失败', icon: 'none' })
+    console.log('兑换失败:', e)
   }
 }
 

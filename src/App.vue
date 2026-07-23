@@ -1,14 +1,17 @@
 <script setup lang="ts">
 import { onLaunch, onShow, onHide } from '@dcloudio/uni-app'
+import { getDurationStorageKey, startWatchTimer } from '@/utils/watch-timer'
 
 const SCENE_VALUE_KEY = 'wx_scene_value'
 
 onLaunch(async (opt) => {
   console.log('App Launch', opt)
-  // 冷启动时清空本地缓存（强制重新登录），但保留主题色设置
+  // 冷启动时清空本地缓存（强制重新登录），但保留主题色设置和观看时长设置
   let savedTheme = ''
+  let savedDuration = ''
   try {
     savedTheme = uni.getStorageSync('app_color_theme') || ''
+    savedDuration = uni.getStorageSync(getDurationStorageKey()) || ''
   } catch (_e) {
     // ignore
   }
@@ -24,6 +27,15 @@ onLaunch(async (opt) => {
       // ignore
     }
   }
+  if (savedDuration) {
+    try {
+      uni.setStorageSync(getDurationStorageKey(), savedDuration)
+    } catch (_e) {
+      // ignore
+    }
+  }
+  // 冷启动开始计时（每次观看时长功能）
+  startWatchTimer()
   // 扫描小程序码进入时，保存 query.scene 作为 sceneValue
   const scene = opt?.query?.scene
   if (scene) {

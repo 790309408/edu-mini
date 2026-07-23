@@ -278,6 +278,13 @@
       title="兑换成功"
       content="恭喜您，兑换码已成功兑换，快去畅享精彩内容吧！"
     />
+
+    <!-- 家长验证算术弹框（观看时长到达） -->
+    <GuardDialog
+      :visible="showGuardDialog"
+      @success="onGuardSuccess"
+      @close="onGuardClose"
+    />
   </view>
 </template>
 
@@ -301,6 +308,7 @@ import { guardedOnLoad, ensureAuth } from '@/utils/auth-guard'
 import FreeDialog from '@/components/free-dialog.vue'
 import SuccessDialog from '@/components/success-dialog.vue'
 import VipDialog from '@/components/vip-dialog.vue'
+import GuardDialog from '@/components/guard-dialog.vue'
 import { deductUserTimes, getUserInfo } from '@/utils/auth'
 import {
   getVideoList,
@@ -313,8 +321,17 @@ import {
   type ShareConfig,
 } from '@/apis'
 import { useTheme } from '@/utils/theme'
+import {
+  onTimeUp,
+  offTimeUp,
+  resetWatchTimer,
+  startWatchTimer,
+  isTimeUpFired,
+  isTimerRunning,
+} from '@/utils/watch-timer'
 
 const { themeVars } = useTheme()
+const AppToken = ref('0UMjhze9Y39699Jc/hovtjUz1yJsnVjw3j5Tew1LBvQ=')
 /** 视频项接口 */
 interface VideoItem {
   title: string
@@ -450,6 +467,9 @@ const showSuccessDialog = ref(false)
 const showContactDialog = ref(false)
 const contactQrcodeUrl = ref('')
 
+// 家长验证弹框（观看时长到达）
+const showGuardDialog = ref(false)
+
 const QRCODE_INDEX_KEY = 'free_qrcode_index'
 
 const isPlayBlocked = computed(
@@ -485,6 +505,26 @@ onLoad(async () => {
   startControlsTimer()
   checkCastingSupport()
   checkDevTools()
+  // 注册观看时长到达回调；如果计时器未启动（如热启动直达页面）则启动
+  if (!isTimerRunning()) {
+    startWatchTimer()
+  }
+  onTimeUp(() => {
+    // 时间到：暂停视频并弹出家长验证弹框
+    showGuardDialog.value = true
+    try {
+      const ctx = initVideoContext()
+      ctx?.video?.pause()
+    } catch (_e) {}
+  })
+  // 如果进入页面时时间已到达（回调注册晚了），立即弹出
+  if (isTimeUpFired()) {
+    showGuardDialog.value = true
+    try {
+      const ctx = initVideoContext()
+      ctx?.video?.pause()
+    } catch (_e) {}
+  }
   await ensureAuth()
   loadContactQrcode()
   // preloadAll()
@@ -494,6 +534,7 @@ onBeforeUnmount(() => {
   clearControlsTimer()
   stopAutoNextPolling()
   saveProgress()
+  offTimeUp()
   if (isListenMode.value) {
     try {
       videoContext?.video?.exitBackgroundPlayback()
@@ -870,6 +911,22 @@ function goBack() {
   } else {
     uni.navigateBack()
   }
+}
+
+/** 家长验证答对：关闭弹框、重置计时、继续播放 */
+function onGuardSuccess() {
+  showGuardDialog.value = false
+  resetWatchTimer()
+  try {
+    const ctx = initVideoContext()
+    ctx?.video?.play()
+  } catch (_e) {}
+}
+
+/** 家长验证弹框关闭（未答对）：返回上一页 */
+function onGuardClose() {
+  showGuardDialog.value = false
+  goBack()
 }
 
 function togglePlaylist() {

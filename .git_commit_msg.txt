@@ -1,11 +1,5 @@
-feat: 登录接口appToken字段接入及common-video组件对齐index.vue
+merge: 合并 main 分支防沉迷功能到 main-child
 
-- LoginResult 新增 appToken 字段，登录成功后缓存至 app_token
-- video/index.vue apptoken 改为取登录返回值，移除硬编码兜底
-- common-video.vue 样式与交互全面对齐 index.vue：
-  - 自定义进度条（时间显示、拖拽seek、渐变蒙层）
-  - 中央播放/暂停按钮（CSS图标+弹跳动画）
-  - 自动下一集/循环当前集开关
-  - 播放列表滚动定位当前项
-  - 容器宽度100%、关闭原生controls
-- BASE_URL 切换为 xh.babytime.top
+- 合并观看时长限制、家长验证弹框、防沉迷受限状态持久化等功能
+- 保留 main-child 的 appToken 接入与 common-video 组件对齐
+- video/index.vue 同时引入 CommonVideo 与 GuardDialog 组件

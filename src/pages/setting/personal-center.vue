@@ -65,6 +65,18 @@
             </view>
           </view>
 
+          <!-- 每次观看时长 -->
+          <view class="card-item duration-card" @tap="onGoToWatchDuration">
+            <view class="card-left">
+              <text class="card-icon">⏰</text>
+              <text class="card-title">每次观看时长</text>
+            </view>
+            <view class="card-right">
+              <text class="card-desc">{{ watchDurationLabel }}</text>
+              <view class="arrow-icon"></view>
+            </view>
+          </view>
+
           <!-- 免责声明 -->
           <view class="card-item disclaimer-card" @tap="onGoToDisclaimer">
             <view class="card-left">
@@ -225,6 +237,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
 import {
   type ThemeKey,
   THEMES,
@@ -239,6 +252,7 @@ import {
   submitMessage,
   uploadSingleImage,
 } from '@/apis'
+import { getWatchDuration } from '@/utils/watch-timer'
 import type { LoginResult } from '@/apis'
 
 const { themeVars } = useTheme()
@@ -484,6 +498,19 @@ const onSubmitMessage = async () => {
 // 我的留言
 const onGoToMyMessages = () => {
   uni.navigateTo({ url: '/pages/setting/my-messages' })
+}
+
+// 每次观看时长
+const watchDuration = ref(getWatchDuration())
+const watchDurationLabel = computed(() => `${watchDuration.value}分钟`)
+
+// 从设置页返回时刷新时长显示
+onShow(() => {
+  watchDuration.value = getWatchDuration()
+})
+
+const onGoToWatchDuration = () => {
+  uni.navigateTo({ url: '/pages/setting/watch-duration' })
 }
 
 // 免责声明

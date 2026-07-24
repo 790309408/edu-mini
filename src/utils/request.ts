@@ -62,6 +62,7 @@ function handle401() {
 function getHeaders(customHeaders?: Record<string, string>): Record<string, string> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
+    'appId': 'wx8dd20779c982510c',
     ...customHeaders,
   }
   // 携带 token

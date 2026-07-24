@@ -79,6 +79,14 @@
         "navigationStyle": "custom",
         "pageOrientation": "portrait"
       }
+    },
+    {
+      "path": "pages/setting/watch-duration",
+      "style": {
+        "navigationBarTitleText": "宝宝星盒 - 每次观看时长",
+        "navigationStyle": "custom",
+        "pageOrientation": "portrait"
+      }
     }
   ],
   "globalStyle": {

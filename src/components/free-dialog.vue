@@ -184,12 +184,11 @@ function onConfirm() {
   border-radius: 65% 35% 55% 42% / 50% 58% 40% 48%;
 }
 
-/* 打开态：入场缩放 + 持续形变 + 漂浮 */
+/* 打开态：入场缩放 + 持续形变 */
 .shell-open {
   animation:
     shellIn 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.15) both,
-    fluidShape 18s linear infinite,
-    floatUpDown 6s ease-in-out 0.3s infinite;
+    fluidShape 18s linear infinite;
 }
 
 /* 关闭态：退场动画 */
@@ -522,22 +521,6 @@ function onConfirm() {
   100% {
     border-radius: 65% 35% 55% 42% / 50% 58% 40% 48%;
     background-position: 0% 0%;
-  }
-}
-
-/* ── 上下缓慢漂浮 ── */
-@keyframes floatUpDown {
-  0% {
-    transform: translateY(0);
-  }
-  25% {
-    transform: translateY(-2vw);
-  }
-  75% {
-    transform: translateY(2vw);
-  }
-  100% {
-    transform: translateY(0);
   }
 }
 

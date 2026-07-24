@@ -1,10 +1,11 @@
 <template>
   <view class="video-page" :style="themeVars">
-    <view class="video-container" @tap="onContainerTap">
+    <!-- apptoken 有值时使用 m-video 插件播放 -->
+    <view v-if="apptoken" class="video-container" @tap="onContainerTap">
       <view class="video-wrapper" :class="{ 'video-shrink': showPlaylist }">
         <m-video
           class="video-player"
-          token="SzHNQ7i4ORfSqqUp9DFr34L+9SDcdpsGS+RJO4luuYc="
+          :token="apptoken"
           id="refVideo"
           ref="refVideo"
           :key="currentVideo.url"
@@ -243,6 +244,18 @@
         @close="showContactDialog = false"
       />
     </view>
+
+    <!-- apptoken 无值时使用原生 video（common-video 组件） -->
+    <CommonVideo
+      v-else
+      :video-list="videoList"
+      :initial-index="initialIndex"
+      :paused="isPlayBlocked"
+      @change="onCommonChange"
+      @ended="onCommonEnded"
+      @blocked="onCommonBlocked"
+    />
+
     <!-- 免费次数用完提示弹框 -->
     <view v-if="showNoTimesDialog" class="no-times-overlay">
       <view class="no-times-dialog">
@@ -301,6 +314,7 @@ import { guardedOnLoad, ensureAuth } from '@/utils/auth-guard'
 import FreeDialog from '@/components/free-dialog.vue'
 import SuccessDialog from '@/components/success-dialog.vue'
 import VipDialog from '@/components/vip-dialog.vue'
+import CommonVideo from '@/components/common-video.vue'
 import { deductUserTimes, getUserInfo } from '@/utils/auth'
 import {
   getVideoList,
@@ -324,7 +338,8 @@ interface VideoItem {
 }
 
 const speedOptions = [0.5, 0.8, 1, 1.25, 1.5, 2]
-
+/** 腾讯云点播 AppToken：取登录接口返回值，有值走 m-video 插件，无值走原生 video */
+const apptoken = ref(uni.getStorageSync('app_token') || '')
 /** 进度记录项 */
 interface ProgressRecord {
   videoId: string
@@ -486,6 +501,8 @@ onLoad(async () => {
   checkCastingSupport()
   checkDevTools()
   await ensureAuth()
+  // 鉴权完成后刷新 appToken（首次登录时 setup 阶段 storage 可能还为空）
+  apptoken.value = uni.getStorageSync('app_token') || ''
   loadContactQrcode()
   // preloadAll()
 })
@@ -1322,6 +1339,21 @@ function onPlayBlocked() {
 }
 function onChange(index: number) {
   doDeduct()
+}
+
+// ==================== common-video 事件 ====================
+
+function onCommonChange(index: number) {
+  currentIndex.value = index
+  doDeduct()
+}
+
+function onCommonEnded(index: number) {
+  reportWatchFinished(index)
+}
+
+function onCommonBlocked() {
+  showFreeDialog.value = true
 }
 
 function checkCastingSupport() {

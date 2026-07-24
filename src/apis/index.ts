@@ -24,6 +24,7 @@ export interface LoginResult {
   freeViewRemain: number
   session_key?: string
   token: string | null
+  appToken?: string
 }
 
 /** 顶部 Tab 项 */
@@ -105,7 +106,7 @@ export function wxLogin(code: string, openId?: string, bindUserId?: string | num
   if (sceneValue !== undefined && sceneValue !== null && sceneValue !== '') {
     payload.sceneValue = sceneValue
   }
-  return post<LoginResult>('/app/user/wxlogin', payload, { showLoading: false })
+  return post<LoginResult>('/app/user/wxlogin', payload, { showLoading: false, header: { appid: 'wx8dd20779c982510c' } })
 }
 
 /** 扣除用户试看次数 */

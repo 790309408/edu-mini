@@ -50,6 +50,10 @@ export async function getUserInfo(bindUserId?: string | number) {
   uni.setStorageSync(USER_INFO_KEY, result)
   // 6.缓存token
   uni.setStorageSync(TOKEN_KEY, result.token || '')
+  // 7.缓存腾讯云点播 appToken
+  if (result.appToken) {
+    uni.setStorageSync('app_token', result.appToken)
+  }
 }
 
 /**

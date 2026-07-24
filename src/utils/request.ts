@@ -1,6 +1,6 @@
 const TOKEN_KEY = 'wx_token'
 /** 请求基础配置 */
-const BASE_URL = 'https://babytime.top'
+const BASE_URL = 'https://xh.babytime.top'//'https://babytime.top'
 //const BASE_URL = 'http://55124f33.r16.vip.cpolar.cn'
 
 /** 请求超时时间（ms） */

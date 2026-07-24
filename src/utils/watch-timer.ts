@@ -32,6 +32,38 @@ export function setWatchDuration(minutes: number) {
   }
 }
 
+// ====== 观看受限状态（持久化） ======
+
+/** 观看受限存储 key：时间到且家长未验证通过时置为 1 */
+const WATCH_BLOCKED_KEY = 'watch_time_blocked'
+
+/** 是否处于观看受限状态（时间到且未通过家长验证） */
+export function isWatchBlocked(): boolean {
+  try {
+    return uni.getStorageSync(WATCH_BLOCKED_KEY) === '1'
+  } catch (_e) {
+    return false
+  }
+}
+
+/** 标记观看受限（时间到时调用） */
+export function setWatchBlocked() {
+  try {
+    uni.setStorageSync(WATCH_BLOCKED_KEY, '1')
+  } catch (_e) {
+    // ignore
+  }
+}
+
+/** 解除观看受限（家长验证通过后调用） */
+export function clearWatchBlocked() {
+  try {
+    uni.removeStorageSync(WATCH_BLOCKED_KEY)
+  } catch (_e) {
+    // ignore
+  }
+}
+
 /** 获取存储 key（供 App.vue 冷启动清理时保留用） */
 export function getDurationStorageKey(): string {
   return WATCH_DURATION_KEY

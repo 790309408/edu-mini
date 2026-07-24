@@ -8,7 +8,7 @@
           id="refVideo"
           ref="refVideo"
           :key="currentVideo.url"
-          :autoplay="true"
+          :autoplay="!isPlayBlocked"
           :speedRate="playbackRate"
           :src="currentVideo.url"
           :showSpeedRateBtn="false"
@@ -326,8 +326,9 @@ import {
   offTimeUp,
   resetWatchTimer,
   startWatchTimer,
-  isTimeUpFired,
-  isTimerRunning,
+  isWatchBlocked,
+  setWatchBlocked,
+  clearWatchBlocked,
 } from '@/utils/watch-timer'
 
 const { themeVars } = useTheme()
@@ -473,7 +474,11 @@ const showGuardDialog = ref(false)
 const QRCODE_INDEX_KEY = 'free_qrcode_index'
 
 const isPlayBlocked = computed(
-  () => timesExhausted.value || showNoTimesDialog.value || showFreeDialog.value,
+  () =>
+    timesExhausted.value ||
+    showNoTimesDialog.value ||
+    showFreeDialog.value ||
+    showGuardDialog.value,
 )
 
 /** 从 storage 读取指定视频的保存进度 */
@@ -500,30 +505,48 @@ function initVideoContext(): any {
   return videoContext
 }
 
+/**
+ * 重试暂停视频（兼容部分机型插件组件延迟就绪，onLoad 时 pause 无效的情况）
+ * 最多重试 10 次，每次间隔 300ms，确保视频不会在受限期间播放
+ */
+function pauseVideoWithRetry(attempt = 0) {
+  if (!isPlayBlocked.value) return // 已解除受限，无需继续暂停
+  try {
+    videoContext = null
+    const ctx = initVideoContext()
+    if (ctx && ctx.video) {
+      ctx.video.pause()
+      return // 暂停成功
+    }
+  } catch (_e) {}
+  // 实例未就绪，延迟重试
+  if (attempt < 10) {
+    setTimeout(() => pauseVideoWithRetry(attempt + 1), 300)
+  }
+}
+
 onLoad(async () => {
   initVideoContext()
   startControlsTimer()
   checkCastingSupport()
   checkDevTools()
-  // 注册观看时长到达回调；如果计时器未启动（如热启动直达页面）则启动
-  if (!isTimerRunning()) {
-    startWatchTimer()
-  }
+  // 防沉迷：注册时间到达回调（无论是否受限都需注册，答对后重新计时仍可能再次触发）
   onTimeUp(() => {
-    // 时间到：暂停视频并弹出家长验证弹框
+    // 时间到：标记受限、暂停视频并弹出家长验证弹框
+    setWatchBlocked()
     showGuardDialog.value = true
     try {
       const ctx = initVideoContext()
       ctx?.video?.pause()
     } catch (_e) {}
   })
-  // 如果进入页面时时间已到达（回调注册晚了），立即弹出
-  if (isTimeUpFired()) {
+  if (isWatchBlocked()) {
+    // 仍受限：立即弹出家长验证弹框，禁止播放
     showGuardDialog.value = true
-    try {
-      const ctx = initVideoContext()
-      ctx?.video?.pause()
-    } catch (_e) {}
+    pauseVideoWithRetry()
+  } else {
+    // 未受限：进入视频页重新开始计时
+    startWatchTimer()
   }
   await ensureAuth()
   loadContactQrcode()
@@ -535,6 +558,8 @@ onBeforeUnmount(() => {
   stopAutoNextPolling()
   saveProgress()
   offTimeUp()
+  // 离开视频页（返回主页等）时重置计时，防沉迷弹框仅在视频页生效
+  resetWatchTimer()
   if (isListenMode.value) {
     try {
       videoContext?.video?.exitBackgroundPlayback()
@@ -913,17 +938,19 @@ function goBack() {
   }
 }
 
-/** 家长验证答对：关闭弹框、重置计时、继续播放 */
+/** 家长验证答对：解除受限、关闭弹框、重置计时、继续播放 */
 function onGuardSuccess() {
+  clearWatchBlocked()
   showGuardDialog.value = false
   resetWatchTimer()
+  startWatchTimer()
   try {
     const ctx = initVideoContext()
     ctx?.video?.play()
   } catch (_e) {}
 }
 
-/** 家长验证弹框关闭（未答对）：返回上一页 */
+/** 家长验证弹框关闭（未答对）：不重置时间，仍不能观看，返回上一页 */
 function onGuardClose() {
   showGuardDialog.value = false
   goBack()
@@ -1117,10 +1144,16 @@ function triggerAutoNext() {
 
 function onPlay() {
   if (isPlayBlocked.value) {
+    // 兼容部分机型：强制重新获取实例后暂停
     try {
-      videoContext?.video?.pause()
+      videoContext = null
+      const ctx = initVideoContext()
+      ctx?.video?.pause()
     } catch (_e) {}
-    onPlayBlocked()
+    // 防沉迷弹框期间仅暂停，不弹免费弹框
+    if (!showGuardDialog.value) {
+      onPlayBlocked()
+    }
     return
   }
   isPlaying.value = true
@@ -1134,6 +1167,7 @@ function onPlay() {
   const checkIndex = currentIndex.value
   setTimeout(() => {
     if (currentIndex.value !== checkIndex) return // 已切到别的视频
+    if (isPlayBlocked.value) return // 受限期间不重试播放
     if (duration.value > 0) return // 视频正常加载
     console.warn('[video] 视频 8s 未加载，重试播放')
     videoContext = null
@@ -1184,7 +1218,10 @@ function onPause() {
 
 function togglePlayPause() {
   if (isPlayBlocked.value) {
-    onPlayBlocked()
+    // 防沉迷弹框期间忽略播放操作
+    if (!showGuardDialog.value) {
+      onPlayBlocked()
+    }
     return
   }
   const ctx = initVideoContext()
@@ -1211,7 +1248,10 @@ function flashCenterBtn() {
 function switchVideo(index: number, fromAutoNext = false) {
   if (index === currentIndex.value) return
   if (isPlayBlocked.value) {
-    onPlayBlocked()
+    // 防沉迷弹框期间忽略切集操作
+    if (!showGuardDialog.value) {
+      onPlayBlocked()
+    }
     return
   }
   switchingVideo = true

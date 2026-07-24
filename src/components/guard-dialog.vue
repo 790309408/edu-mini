@@ -167,7 +167,7 @@ function onClose() {
   width: 38vw;
   background: #fff;
   border-radius: 2.4vw;
-  padding: 2.8vw 2.4vw;
+  padding: 2.2vw 2.4vw 2.4vw;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -180,7 +180,7 @@ function onClose() {
   align-items: center;
   justify-content: center;
   position: relative;
-  margin-bottom: 2.2vw;
+  margin-bottom: 1.4vw;
 }
 
 .guard-title {
@@ -217,7 +217,7 @@ function onClose() {
   align-items: center;
   justify-content: center;
   gap: 1.6vw;
-  margin-bottom: 2vw;
+  margin-bottom: 1.4vw;
 }
 
 .question-text {
@@ -257,20 +257,20 @@ function onClose() {
 .guard-error {
   font-size: 1.6vw;
   color: #e53935;
-  margin-bottom: 1vw;
+  margin-bottom: 0.6vw;
 }
 
 .guard-keyboard {
   width: 100%;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 1.4vw;
+  gap: 1vw;
   justify-items: center;
 }
 
 .key-item {
-  width: 5.2vw;
-  height: 5.2vw;
+  width: 4.4vw;
+  height: 4.4vw;
   background: linear-gradient(145deg, var(--theme-start), var(--theme-end));
   border-radius: 50%;
   display: flex;
@@ -296,13 +296,13 @@ function onClose() {
 }
 
 .key-text {
-  font-size: 2.6vw;
+  font-size: 2.3vw;
   font-weight: 700;
   color: #fff;
 }
 
 .key-text-delete {
-  font-size: 2.6vw;
+  font-size: 2.3vw;
   color: #666;
 }
 </style>

@@ -1,5 +1,0 @@
-merge: 合并 main 分支防沉迷功能到 main-child
-
-- 合并观看时长限制、家长验证弹框、防沉迷受限状态持久化等功能
-- 保留 main-child 的 appToken 接入与 common-video 组件对齐
-- video/index.vue 同时引入 CommonVideo 与 GuardDialog 组件

@@ -18,6 +18,9 @@ Thumbs.db
 *.log
 npm-debug.log*
 
+# Commit message temp file
+.git_commit_msg.txt
+
 # Environment
 .env
 .env.local

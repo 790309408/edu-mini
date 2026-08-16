@@ -116,8 +116,8 @@
       content="恭喜您，兑换码已成功兑换，快去畅享精彩内容吧！"
     />
 
-    <!-- 悬浮搜索按钮 -->
-    <float-search-btn />
+    <!-- 悬浮搜索按钮：登录接口 searchSwitch=1 时显示 -->
+    <float-search-btn v-if="searchSwitch === 1" />
 
     <!-- VIP 引流弹框：点击 VIP 课程且非会员时弹出 -->
     <vip-dialog
@@ -223,6 +223,9 @@ guardedOnShow(() => {
 const tabs = ref<Tab[]>([])
 
 const currentTab = ref(0)
+
+/** 搜索开关：登录接口 searchSwitch 为 1 时显示悬浮搜索按钮 */
+const searchSwitch = ref<number>(0)
 
 /** 从接口获取 tab 列表 */
 async function fetchTabs() {
@@ -575,6 +578,8 @@ guardedOnLoad((query) => {
   const userInfo = uni.getStorageSync('wx_user_info') as any
   const vipType = userInfo ? Number(userInfo.vipType) : 0
   const isVip = userInfo && userInfo.vip === true && vipType > 0
+  // 同步搜索开关
+  searchSwitch.value = userInfo ? Number(userInfo.searchSwitch) || 0 : 0
 
   if (userInfo && !isVip) {
     // 非会员：弹出免费领取弹框（free-dialog）+ 关闭后弹 share-dialog
@@ -628,6 +633,11 @@ async function onRedeemConfirm(code: string) {
     // 兑换成功后刷新登录接口，同步最新用户信息（vip / vipType / freeViewRemain 等）
     try {
       await getUserInfo()
+      // 刷新后同步搜索开关
+      const refreshedUser = uni.getStorageSync('wx_user_info') as any
+      searchSwitch.value = refreshedUser
+        ? Number(refreshedUser.searchSwitch) || 0
+        : 0
     } catch (refreshErr) {
       console.log('兑换后刷新用户信息失败:', refreshErr)
     }

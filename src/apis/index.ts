@@ -25,6 +25,8 @@ export interface LoginResult {
   session_key?: string
   token: string | null
   appToken?: string
+  /** 搜索开关：1=显示搜索入口，其他值不显示 */
+  searchSwitch?: number
 }
 
 /** 顶部 Tab 项 */
@@ -106,7 +108,7 @@ export function wxLogin(code: string, openId?: string, bindUserId?: string | num
   if (sceneValue !== undefined && sceneValue !== null && sceneValue !== '') {
     payload.sceneValue = sceneValue
   }
-  return post<LoginResult>('/app/user/wxlogin', payload, { showLoading: false, header: { appid: 'wx8dd20779c982510c' } })
+  return post<LoginResult>('/app/user/wxlogin', payload, { showLoading: false, header: { appid: import.meta.env.VITE_APP_APPID } })
 }
 
 /** 扣除用户试看次数 */

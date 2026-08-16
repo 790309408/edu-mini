@@ -95,10 +95,6 @@
     "navigationBarBackgroundColor": "#F8F8F8",
     "backgroundColor": "#F8F8F8",
     "pageOrientation": "landscape",
-    "mp-weixin": {
-			"usingComponents": {
-				"m-video": "plugin://m-video/m-video"
-			}
-		}
+    
   }
 }

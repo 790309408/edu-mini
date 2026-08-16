@@ -1,7 +1,7 @@
 <template>
   <view class="video-page" :style="themeVars">
     <!-- apptoken 有值时使用 m-video 插件播放 -->
-    <view v-if="apptoken" class="video-container" @tap="onContainerTap">
+    <!-- <view v-if="apptoken" class="video-container" @tap="onContainerTap">
       <view class="video-wrapper" :class="{ 'video-shrink': showPlaylist }">
         <m-video
           class="video-player"
@@ -33,7 +33,7 @@
           @castinginterrupt="onCastingInterrupt"
           :debug="false"
         />
-        <!-- 开发工具 H.265 不支持提示 -->
+
         <view v-if="showDevToolsTip" class="devtools-tip">
           <text class="devtools-tip-text"
             >开发工具不支持 H.265
@@ -41,14 +41,12 @@
           >
         </view>
 
-        <!-- 透明点击层：始终覆盖视频区域，拦截所有点击传递给 onContainerTap -->
         <view
           v-if="!isListenMode"
           class="tap-layer"
           @tap.stop="onContainerTap"
         />
 
-        <!-- 中央播放/暂停按钮 -->
         <view
           v-if="
             !isListenMode && !showSpeedPanel && (showControls || showCenterBtn)
@@ -60,9 +58,8 @@
             :key="centerBounceKey"
             class="center-play-circle center-bounce-anim"
           >
-            <!-- 播放三角形 -->
             <view v-if="!isPlaying" class="css-play-icon" />
-            <!-- 暂停双竖条 -->
+
             <view v-else class="css-pause-icon">
               <view class="pause-bar" />
               <view class="pause-bar" />
@@ -70,7 +67,6 @@
           </view>
         </view>
 
-        <!-- 听视频模式遮罩 -->
         <view
           v-if="isListenMode"
           class="listen-overlay"
@@ -81,7 +77,6 @@
           <text class="listen-sub-text">音频播放中，点击屏幕退出</text>
         </view>
 
-        <!-- 左侧控制按钮 -->
         <view
           v-if="showControls && !isListenMode"
           class="side-controls left-controls"
@@ -102,7 +97,6 @@
           </view>
         </view>
 
-        <!-- 自定义进度条 -->
         <view
           v-if="!isListenMode && (showControls || isProgressDragging)"
           class="progress-bar"
@@ -137,7 +131,6 @@
           </view>
         </view>
 
-        <!-- 右侧控制按钮 -->
         <view
           v-if="showControls && !isListenMode"
           class="side-controls right-controls"
@@ -156,7 +149,6 @@
         </view>
       </view>
 
-      <!-- 视频列表面板 -->
       <view
         v-if="showPlaylist"
         class="playlist-panel"
@@ -198,7 +190,6 @@
         </scroll-view>
       </view>
 
-      <!-- 播放模式切换开关（左侧视频区域） -->
       <view v-if="showPlaylist" class="play-mode-switch" @tap.stop>
         <text class="play-mode-label">{{
           autoPlayNext ? '自动下一集' : '循环当前集'
@@ -211,7 +202,6 @@
         />
       </view>
 
-      <!-- 倍速选择面板 -->
       <view
         v-if="showSpeedPanel"
         class="speed-mask"
@@ -233,7 +223,6 @@
         </view>
       </view>
 
-      <!-- 联系我们弹框 -->
       <VipDialog
         :visible="showContactDialog"
         :qrcode-url="contactQrcodeUrl"
@@ -243,11 +232,10 @@
         @update:visible="showContactDialog = $event"
         @close="showContactDialog = false"
       />
-    </view>
+    </view> -->
 
     <!-- apptoken 无值时使用原生 video（common-video 组件） -->
     <CommonVideo
-      v-else
       :video-list="videoList"
       :initial-index="initialIndex"
       :paused="isPlayBlocked"
@@ -346,7 +334,6 @@ import {
 } from '@/utils/watch-timer'
 
 const { themeVars } = useTheme()
-const AppToken = ref('0UMjhze9Y39699Jc/hovtjUz1yJsnVjw3j5Tew1LBvQ=')
 /** 视频项接口 */
 interface VideoItem {
   title: string

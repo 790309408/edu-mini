@@ -1573,7 +1573,7 @@ onShareAppMessage(() => {
     .filter(Boolean)
     .join('&')
   return {
-    title: friend?.title || '宝宝星盒 - 免费儿童启蒙动画视频',
+    title: friend?.title || '宝宝星盒',
     desc: friend?.desc || '',
     path: params ? `/pages/video/index?${params}` : '/pages/video/index',
     imageUrl: courseCover.value || friend?.imageUrl || '',
@@ -1590,7 +1590,7 @@ onShareTimeline(() => {
     userId ? `userId=${userId}` : '',
   ].filter(Boolean)
   return {
-    title: timeline?.title || '宝宝星盒 - 免费儿童启蒙动画视频',
+    title: timeline?.title || '宝宝星盒',
     query: parts.join('&'),
     imageUrl: courseCover.value || timeline?.imageUrl || '',
   }

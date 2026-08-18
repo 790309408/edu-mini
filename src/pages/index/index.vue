@@ -119,6 +119,17 @@
     <!-- 悬浮搜索按钮 -->
     <float-search-btn />
 
+    <!-- 公告 / 会员到期弹框：show=true 时按 mode 展示对应内容 -->
+    <notice-dialog
+      v-model:visible="showNoticeDialog"
+      :mode="noticeMode"
+      :title="noticeTitle"
+      :text-content="noticeTextContent"
+      :qrcode-url="noticeQrcodeUrl"
+      :remain-days="noticeRemainDays"
+      :close-on-overlay="true"
+    />
+
     <!-- VIP 引流弹框：点击 VIP 课程且非会员时弹出 -->
     <vip-dialog
       v-model:visible="showVipDialog"
@@ -142,6 +153,7 @@ import {
   getShareConfig,
   bindUser,
   redeemCode as apiRedeemCode,
+  getExpireNotice,
   type TabItem,
   type CategoryItem,
   type QrcodeItem,
@@ -152,6 +164,7 @@ import ShareDialog from '@/components/share-dialog.vue'
 import SuccessDialog from '@/components/success-dialog.vue'
 import VipDialog from '@/components/vip-dialog.vue'
 import FloatSearchBtn from '@/components/float-search-btn.vue'
+import NoticeDialog from '@/components/notice-dialog.vue'
 
 import { getUserInfo } from '@/utils/auth'
 import { useTheme } from '@/utils/theme'
@@ -218,11 +231,93 @@ guardedOnShow(() => {
   updateWindowHeight()
   updateTabBarHeight()
   fetchShareConfig()
+  // 公告 / 会员到期弹框判定（仅 VIP 调用，接口会消耗 8 小时弹窗额度）
+  fetchNoticePopup()
 })
 
 const tabs = ref<Tab[]>([])
 
 const currentTab = ref(0)
+
+/** 公告 / 会员到期弹框状态 */
+const showNoticeDialog = ref(false)
+const noticeMode = ref<'announce' | 'expire'>('announce')
+const noticeTitle = ref('')
+const noticeTextContent = ref('')
+const noticeQrcodeUrl = ref('')
+const noticeRemainDays = ref<number | null>(null)
+
+/**
+ * 公告 / 会员到期弹框判定
+ * 仅 VIP 用户调用；服务端判定是否弹及弹哪一种（mode 区分），show=true 时展示 popup 内容
+ */
+async function fetchNoticePopup() {
+  // 延迟调用，避开首次进入时的免费领取 / 分享弹框流程，防止多弹框叠加
+  await new Promise((resolve) => setTimeout(resolve, 1500))
+  console.log(
+    '[notice] 开始判定, freeDialog:',
+    showFreeDialog.value,
+    'shareDialog:',
+    showShareDialog.value,
+  )
+  // 若有其他弹框打开则等待其关闭（最长 30s），避免叠加的同时防止永久跳过
+  let waited = 0
+  while ((showFreeDialog.value || showShareDialog.value) && waited < 30000) {
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+    waited += 1000
+  }
+  if (showFreeDialog.value || showShareDialog.value) {
+    console.log('[notice] 等待超时，其他弹框仍打开，跳过')
+    return
+  }
+  // 静默刷新用户信息：本地缓存的 vip 状态可能已过期（token 有效时 ensureAuth 不会重新登录），
+  // 刷新失败则回退用本地缓存判定
+  try {
+    await getUserInfo()
+  } catch (e) {
+    console.log('[notice] 刷新用户信息失败，回退本地缓存判定:', e)
+  }
+  const userInfo = uni.getStorageSync('wx_user_info') as any
+  console.log(
+    '[notice] 用户信息:',
+    userInfo && {
+      vip: userInfo.vip,
+      vipType: userInfo.vipType,
+      userId: userInfo.userId,
+    },
+  )
+  if (!isUserVip()) {
+    console.log('[notice] 非 VIP，跳过')
+    return
+  }
+  const userId = userInfo && userInfo.userId
+  if (!userId) {
+    console.log('[notice] userId 为空，跳过')
+    return
+  }
+  try {
+    console.log('[notice] 调用 expireNotice 接口, userId:', userId)
+    const data = await getExpireNotice(userId)
+    console.log('[notice] 接口返回:', data)
+    if (!data || !data.show || !data.popup) {
+      console.log(
+        '[notice] show=false 或无内容，不弹窗, reason:',
+        data && data.reason,
+      )
+      return
+    }
+    const popup = data.popup
+    const images = popup.images || []
+    noticeMode.value = data.mode === 'expire' ? 'expire' : 'announce'
+    noticeTitle.value = popup.title || ''
+    noticeTextContent.value = popup.textContent || ''
+    noticeQrcodeUrl.value = images.length ? images[0].imageUrl || '' : ''
+    noticeRemainDays.value = data.remainDays ? Number(data.remainDays) : null
+    showNoticeDialog.value = true
+  } catch (e) {
+    console.error('获取公告/到期弹框失败:', e)
+  }
+}
 
 /** 从接口获取 tab 列表 */
 async function fetchTabs() {
@@ -449,7 +544,9 @@ function onVipDialogConfirm() {
 function isUserVip(): boolean {
   const userInfo = uni.getStorageSync('wx_user_info') as any
   if (!userInfo) return false
-  return userInfo.vip === true && Number(userInfo.vipType) > 0
+  // vip 字段兼容后端返回布尔或字符串，vipType 兼容字符串数字
+  const vipFlag = userInfo.vip === true || userInfo.vip === 'true'
+  return vipFlag && Number(userInfo.vipType) > 0
 }
 
 /** 本地存储 key：记录当前应取的二维码下标，每次冷启动循环递增 */
@@ -683,7 +780,7 @@ onShareAppMessage(() => {
   const userId = userInfo && userInfo.userId ? userInfo.userId : ''
   const friend = shareConfig.value?.friend
   return {
-    title: friend?.title || '宝宝星盒 - 免费儿童启蒙动画绘本故事',
+    title: friend?.title || '宝宝星盒',
     desc: friend?.desc || '',
     path: userId ? `/pages/index/index?userId=${userId}` : '/pages/index/index',
     imageUrl: friend?.imageUrl || '',
@@ -696,7 +793,7 @@ onShareTimeline(() => {
   const userId = userInfo && userInfo.userId ? userInfo.userId : ''
   const timeline = shareConfig.value?.timeline
   return {
-    title: timeline?.title || '宝宝星盒 - 免费儿童启蒙动画绘本故事',
+    title: timeline?.title || '宝宝星盒',
     query: userId ? `userId=${userId}` : '',
     imageUrl: timeline?.imageUrl || '',
   }

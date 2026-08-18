@@ -167,6 +167,46 @@ export function getQrcodeListByType(type: number) {
   return get<QrcodeItem[]>('/app/qrcode/listByType', { type }, { showLoading: false })
 }
 
+/** 公告 / 会员到期弹窗内容（结构同二维码弹框，内容未配置时 id/title/name 为 null） */
+export interface NoticePopupItem {
+  id: number | null
+  title: string | null
+  name: string | null
+  /** 弹窗类型：4=会员到期提醒，5=系统公告 */
+  type: number
+  textContent: string
+  num?: number
+  sort?: number
+  status?: number
+  /** 固定只含一张二维码 */
+  images: QrcodeImage[]
+}
+
+/** 公告 / 会员到期弹窗判定结果 */
+export interface ExpireNoticeResult {
+  /** 是否弹窗：true=展示，false=不展示 */
+  show: boolean
+  /** 弹窗模式：announce=公告，expire=会员到期提醒 */
+  mode: 'announce' | 'expire'
+  /** 不弹窗的原因（仅 show=false 时有值） */
+  reason: string | null
+  /** 会员到期时间（公告模式为 null） */
+  vipExpire: string | null
+  /** 距到期剩余天数（公告模式为 null） */
+  remainDays: number | null
+  /** 该用户此类型弹窗的累计弹出次数（含本次） */
+  popupCount: number | null
+  popup: NoticePopupItem | null
+}
+
+/**
+ * 公告 / 会员到期弹窗判定
+ * 注意：接口会记录弹窗频率（每 8 小时一次），仅在真正需要弹窗的时机调用（如首页 onShow）
+ */
+export function getExpireNotice(userId: number | string) {
+  return get<ExpireNoticeResult>('/app/qrcode/expireNotice', { userId }, { showLoading: false, showError: false })
+}
+
 // ============ 分享配置 ============
 
 /** 分享渠道配置 */

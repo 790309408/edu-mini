@@ -3,7 +3,7 @@
     {
       "path": "pages/index/index",
       "style": {
-        "navigationBarTitleText": "宝宝星盒 - 儿童启蒙动画绘本故事",
+        "navigationBarTitleText": "宝宝星盒",
         "navigationStyle": "custom",
         "pageOrientation": "landscape"
       }
@@ -11,7 +11,7 @@
     {
       "path": "pages/video/index",
       "style": {
-        "navigationBarTitleText": "宝宝星盒 - 免费儿童教育视频播放",
+        "navigationBarTitleText": "宝宝星盒",
         "navigationStyle": "custom",
         "pageOrientation": "landscape"
       }
@@ -27,7 +27,7 @@
     {
       "path": "pages/article/index",
       "style": {
-        "navigationBarTitleText": "宝宝星盒 - 儿童绘本故事图文",
+        "navigationBarTitleText": "宝宝星盒",
         "navigationStyle": "custom",
         "pageOrientation": "portrait"
       }
@@ -91,7 +91,7 @@
   ],
   "globalStyle": {
     "navigationBarTextStyle": "black",
-    "navigationBarTitleText": "宝宝星盒 - 儿童启蒙动画绘本故事早教视频",
+    "navigationBarTitleText": "宝宝星盒 ",
     "navigationBarBackgroundColor": "#F8F8F8",
     "backgroundColor": "#F8F8F8",
     "pageOrientation": "landscape",
